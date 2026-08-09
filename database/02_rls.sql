@@ -9,6 +9,7 @@ alter table public.categorias          enable row level security;
 alter table public.productos           enable row level security;
 alter table public.variantes_precio    enable row level security;
 alter table public.promociones         enable row level security;
+alter table public.clientes            enable row level security;
 alter table public.pedidos             enable row level security;
 alter table public.pedido_items        enable row level security;
 alter table public.historico_comandas  enable row level security;
@@ -73,21 +74,91 @@ create policy promociones_write_superadmin on public.promociones
   using (public.tiene_rol(auth.uid(), 'superadmin'))
   with check (public.tiene_rol(auth.uid(), 'superadmin'));
 
+-- ── clientes ────────────────────────────────────────────────────────────────
+-- Cualquier cliente puede registrar su nombre + teléfono y consultar su propio
+-- registro (por teléfono). No se exponen a terceros.
+drop policy if exists clientes_insert_publico on public.clientes;
+create policy clientes_insert_publico on public.clientes
+  for insert to anon, authenticated with check (true);
+
+drop policy if exists clientes_select_propio on public.clientes;
+create policy clientes_select_propio on public.clientes
+  for select to anon, authenticated
+  using (
+    telefono = current_setting('request.headers', true)::jsonb ->> 'x-cliente-telefono'
+  );
+
+drop policy if exists clientes_update_propio on public.clientes;
+create policy clientes_update_propio on public.clientes
+  for update to anon, authenticated
+  using (true)
+  with check (true);
+
 -- ── pedidos ─────────────────────────────────────────────────────────────────
--- El cliente no tiene login: crea su pedido como 'anon'. La lectura anónima se
--- hace SIEMPRE filtrando por numero_comanda desde la app (el número es el
--- secreto que identifica el pedido). Todo el staff ve y gestiona los pedidos.
+-- El cliente anónimo NO puede leer la tabla directamente (evita enumerar
+-- pedidos ajenos). Toda consulta pública pasa por la RPC
+-- public.consultar_pedido_por_comanda_y_telefono(), que valida que el
+-- numero_comanda Y el cliente_telefono coincidan antes de devolver el pedido.
 drop policy if exists pedidos_insert_publico on public.pedidos;
 create policy pedidos_insert_publico on public.pedidos
   for insert to anon, authenticated
   with check (
-    estado = 'pendiente_pago'
+    estado in ('pendiente_confirmacion_cajera','pendiente_pago')
     and (select negocio_abierto from public.configuracion where id) = true
   );
 
-drop policy if exists pedidos_select_publico on public.pedidos;
-create policy pedidos_select_publico on public.pedidos
-  for select to anon, authenticated using (true);
+drop policy if exists pedidos_select_staff on public.pedidos;
+create policy pedidos_select_staff on public.pedidos
+  for select to authenticated
+  using (public.es_staff(auth.uid()));
+
+-- El cliente anónimo NO puede leer directamente los pedidos:
+-- solo puede consultarlos a través de la RPC segura.
+drop policy if exists pedidos_select_anon on public.pedidos;
+create policy pedidos_select_anon on public.pedidos
+  for select to anon using (false);
+
+-- RPC pública controlada: devuelve el pedido SOLO si coinciden
+-- numero_comanda y cliente_telefono. Devuelve también los ítems.
+drop function if exists public.consultar_pedido_por_comanda_y_telefono(text, text);
+create or replace function public.consultar_pedido_por_comanda_y_telefono(
+  p_numero_comanda text,
+  p_telefono text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_pedido public.pedidos%rowtype;
+  v_items jsonb;
+begin
+  select * into v_pedido
+    from public.pedidos
+   where numero_comanda = p_numero_comanda
+     and cliente_telefono = p_telefono
+   limit 1;
+
+  if not found then
+    return null;
+  end if;
+
+  select coalesce(jsonb_agg(to_jsonb(i) order by i.created), '[]'::jsonb)
+    into v_items
+    from (
+      select pi.*, now() as created
+        from public.pedido_items pi
+       where pi.pedido_id = v_pedido.id
+    ) i;
+
+  return jsonb_build_object(
+    'pedido', to_jsonb(v_pedido),
+    'items', v_items
+  );
+end $$;
+
+grant execute on function public.consultar_pedido_por_comanda_y_telefono(text, text) to anon, authenticated;
 
 -- El cliente anónimo solo puede editar su comanda dentro de los 10 minutos.
 drop policy if exists pedidos_update_ventana_cliente on public.pedidos;

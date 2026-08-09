@@ -8,9 +8,9 @@ on conflict (id) do nothing;
 
 -- ── Categorías ──────────────────────────────────────────────────────────────
 insert into public.categorias (nombre, orden, modelo_3d_url) values
-  ('Desayunos', 1, '/desayunos-tremendo-chicharron.fbx'),
-  ('Almuerzos', 2, '/almuerzos-tremenda-paella.fbx'),
-  ('Para Picar / Tardear', 3, '/picar-tremenda-picada.fbx'),
+  ('Desayunos', 1, '/desayunos-tremendo-chicharron.glb'),
+  ('Almuerzos', 2, '/almuerzos-paella-chicharron.glb'),
+  ('Para Picar / Tardear', 3, '/picar-tardear-chicharron.glb'),
   ('Bebidas', 4, null)
 on conflict do nothing;
 
@@ -27,12 +27,12 @@ values
   ((select id from c where nombre='Desayunos'), 'Tremendo Calentado Criollo', 'Arroz, papa, carne desmechada, arepa al carbón, huevo blando, chorizo o chicharrón, chocolate espeso o aguado.', 22000, false, false, null, false, 5),
   ((select id from c where nombre='Desayunos'), 'Tremendas Migas', 'Migas con arepa remojada en leche, vegetales frescos, especias, huevos, sándwich de jamón y chocolate.', 24000, false, false, null, false, 6),
   ((select id from c where nombre='Desayunos'), 'Tremendo Calentado Sabanero', 'Papas sabaneras fritas, cebolla, tomate, chorizo artesanal, 2 huevos de yema blanda, pan o arepa y chocolate.', 22000, false, false, null, false, 7),
-  ((select id from c where nombre='Desayunos'), 'Tremendo Chicharrón (300g)', 'Arepa, papa salada, plátano maduro, limón, guacamole y barbecue.', 34000, false, true, '/desayunos-tremendo-chicharron.fbx', false, 8),
+  ((select id from c where nombre='Desayunos'), 'Tremendo Chicharrón (300g)', 'Arepa, papa salada, plátano maduro, limón, guacamole y barbecue.', 34000, false, true, '/desayunos-tremendo-chicharron.glb', false, 8),
   ((select id from c where nombre='Desayunos'), 'Tremenda Picada de Chicharrón', 'Chicharrón crocante, chorizos, papa salada, plátano maduro, arepa, limón y guacamole.', null, true, false, null, false, 9),
   ((select id from c where nombre='Desayunos'), 'Tremendo Ceviche de Chicharrón', 'Chicharrón crocante, guacamole, leche de tigre, pico de gallo y nachos mexicanos. (Precio por definir)', null, false, false, null, false, 10),
   -- Almuerzos
   ((select id from c where nombre='Almuerzos'), 'Tremendo Chicharrón (300g)', 'Arepa, papa salada, plátano maduro, limón, guacamole y barbecue.', 34000, false, false, null, false, 1),
-  ((select id from c where nombre='Almuerzos'), 'Tremenda Paella de Chicharrón', 'Fusión de paella española con chicharrón colombiano y chorizo artesanal, arroz de alta calidad, vegetales, cebolla morada y casco de limón.', 34000, false, true, '/almuerzos-tremenda-paella.fbx', false, 2),
+  ((select id from c where nombre='Almuerzos'), 'Tremenda Paella de Chicharrón', 'Fusión de paella española con chicharrón colombiano y chorizo artesanal, arroz de alta calidad, vegetales, cebolla morada y casco de limón.', 34000, false, true, '/almuerzos-paella-chicharron.glb', false, 2),
   ((select id from c where nombre='Almuerzos'), 'Tremenda Picada de Chicharrón', 'Chicharrón crocante, chorizo, papa salada, plátano maduro, arepa, limón y guacamole.', null, true, false, null, false, 3),
   ((select id from c where nombre='Almuerzos'), 'Tremendas Albóndigas de Chicharrón', '3 albóndigas de 100g en bondiola de cerdo, rostizadas con chicharrón, papa, arepa, maduro, guacamole y barbecue.', 26000, false, false, null, false, 4),
   ((select id from c where nombre='Almuerzos'), 'Tremendo Combo Montañero', 'Frijoles a leña, arroz, chicharrón, chorizo, plátano maduro, aguacate + mazamorra michelada incluida.', 30000, false, false, null, false, 5),
@@ -42,7 +42,7 @@ values
   -- Para Picar / Tardear
   ((select id from c where nombre='Para Picar / Tardear'), 'Tremendo Chuzarrón', 'Chicharrón crocante con chorizo artesanal, arepa, papa salada, plátano maduro, limón y guacamole casero.', 22000, false, false, null, false, 1),
   ((select id from c where nombre='Para Picar / Tardear'), 'Hamburguesa de Chicharrón', 'Chicharrón, lechuga, tomate, cebolla caramelizada, patacón horneado con quesillo, guacamole y pan artesanal.', 25000, false, false, null, true, 2),
-  ((select id from c where nombre='Para Picar / Tardear'), 'Tremenda Picada de Chicharrón', 'Chicharrón crocante, chorizo, papa salada, plátano maduro, arepa, limón y guacamole.', null, true, true, '/picar-tremenda-picada.fbx', false, 3),
+  ((select id from c where nombre='Para Picar / Tardear'), 'Tremenda Picada de Chicharrón', 'Chicharrón crocante, chorizo, papa salada, plátano maduro, arepa, limón y guacamole.', null, true, true, '/picar-tardear-chicharron.glb', false, 3),
   ((select id from c where nombre='Para Picar / Tardear'), 'Tremendo Ceviche de Chicharrón', 'Chicharrón crocante, guacamole, leche de tigre, pico de gallo y nachos mexicanos.', 34000, false, false, null, false, 4),
   ((select id from c where nombre='Para Picar / Tardear'), 'Tremenda Mazamorra Michelada', 'Maíz pelado a leña, toque michelado, arequipe, panela rallada y porción extra de leche.', 15000, false, false, null, false, 5),
   -- Bebidas

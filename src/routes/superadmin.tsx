@@ -1,6 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { Power, AlertTriangle, FileSpreadsheet, FileText } from "lucide-react";
+import { estaAutenticado, cerrarSesion } from "@/lib/auth-staff";
 import { CATEGORIAS, PRODUCTOS, PROMOCIONES, formatCOP } from "@/lib/menu-data";
 import {
   ESTADOS_FLUJO,
@@ -32,9 +33,17 @@ export const Route = createFileRoute("/superadmin")({
 });
 
 function SuperAdmin() {
+  const navigate = useNavigate();
   const pedidos = useStore((s) => s.pedidos);
   const config = useStore((s) => s.config);
   const [tab, setTab] = useState<"menu" | "estadisticas" | "promos">("menu");
+
+  // Si no hay sesión activa, redirige al login.
+  useEffect(() => {
+    if (!estaAutenticado("dueno")) {
+      void navigate({ to: "/superadmin/login" });
+    }
+  }, [navigate]);
 
   const stats = useMemo(() => {
     const validos = pedidos.filter((p) => p.estado !== "cancelado");
@@ -93,6 +102,15 @@ function SuperAdmin() {
           <Link to="/" className="text-sm text-muted-foreground hover:text-primary">
             ← Inicio
           </Link>
+          <button
+            onClick={() => {
+              cerrarSesion("dueno");
+              void navigate({ to: "/superadmin/login" });
+            }}
+            className="rounded-xl border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-destructive"
+          >
+            Cerrar sesión
+          </button>
         </div>
       </header>
 

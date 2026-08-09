@@ -15,7 +15,10 @@ import { Route as MenuRouteImport } from './routes/menu'
 import { Route as PedidoRouteImport } from './routes/pedido'
 import { Route as ProgresoRouteImport } from './routes/progreso'
 import { Route as SuperadminRouteImport } from './routes/superadmin'
+import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as ConfirmacionComandaRouteImport } from './routes/confirmacion.$comanda'
+import { Route as PedidoNumero_comandaRouteImport } from './routes/pedido.$numero_comanda'
+import { Route as SuperadminLoginRouteImport } from './routes/superadmin.login'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -47,39 +50,63 @@ const SuperadminRoute = SuperadminRouteImport.update({
   path: '/superadmin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminLoginRoute = AdminLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => AdminRoute,
+} as any)
 const ConfirmacionComandaRoute = ConfirmacionComandaRouteImport.update({
   id: '/confirmacion/$comanda',
   path: '/confirmacion/$comanda',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PedidoNumero_comandaRoute = PedidoNumero_comandaRouteImport.update({
+  id: '/$numero_comanda',
+  path: '/$numero_comanda',
+  getParentRoute: () => PedidoRoute,
+} as any)
+const SuperadminLoginRoute = SuperadminLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => SuperadminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/menu': typeof MenuRoute
-  '/pedido': typeof PedidoRoute
+  '/pedido': typeof PedidoRouteWithChildren
   '/progreso': typeof ProgresoRoute
-  '/superadmin': typeof SuperadminRoute
+  '/superadmin': typeof SuperadminRouteWithChildren
+  '/admin/login': typeof AdminLoginRoute
   '/confirmacion/$comanda': typeof ConfirmacionComandaRoute
+  '/pedido/$numero_comanda': typeof PedidoNumero_comandaRoute
+  '/superadmin/login': typeof SuperadminLoginRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/menu': typeof MenuRoute
-  '/pedido': typeof PedidoRoute
+  '/pedido': typeof PedidoRouteWithChildren
   '/progreso': typeof ProgresoRoute
-  '/superadmin': typeof SuperadminRoute
+  '/superadmin': typeof SuperadminRouteWithChildren
+  '/admin/login': typeof AdminLoginRoute
   '/confirmacion/$comanda': typeof ConfirmacionComandaRoute
+  '/pedido/$numero_comanda': typeof PedidoNumero_comandaRoute
+  '/superadmin/login': typeof SuperadminLoginRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/menu': typeof MenuRoute
-  '/pedido': typeof PedidoRoute
+  '/pedido': typeof PedidoRouteWithChildren
   '/progreso': typeof ProgresoRoute
-  '/superadmin': typeof SuperadminRoute
+  '/superadmin': typeof SuperadminRouteWithChildren
+  '/admin/login': typeof AdminLoginRoute
   '/confirmacion/$comanda': typeof ConfirmacionComandaRoute
+  '/pedido/$numero_comanda': typeof PedidoNumero_comandaRoute
+  '/superadmin/login': typeof SuperadminLoginRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -90,7 +117,10 @@ export interface FileRouteTypes {
     | '/pedido'
     | '/progreso'
     | '/superadmin'
+    | '/admin/login'
     | '/confirmacion/$comanda'
+    | '/pedido/$numero_comanda'
+    | '/superadmin/login'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -99,7 +129,10 @@ export interface FileRouteTypes {
     | '/pedido'
     | '/progreso'
     | '/superadmin'
+    | '/admin/login'
     | '/confirmacion/$comanda'
+    | '/pedido/$numero_comanda'
+    | '/superadmin/login'
   id:
     | '__root__'
     | '/'
@@ -108,16 +141,19 @@ export interface FileRouteTypes {
     | '/pedido'
     | '/progreso'
     | '/superadmin'
+    | '/admin/login'
     | '/confirmacion/$comanda'
+    | '/pedido/$numero_comanda'
+    | '/superadmin/login'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AdminRoute: typeof AdminRoute
+  AdminRoute: typeof AdminRouteWithChildren
   MenuRoute: typeof MenuRoute
-  PedidoRoute: typeof PedidoRoute
+  PedidoRoute: typeof PedidoRouteWithChildren
   ProgresoRoute: typeof ProgresoRoute
-  SuperadminRoute: typeof SuperadminRoute
+  SuperadminRoute: typeof SuperadminRouteWithChildren
   ConfirmacionComandaRoute: typeof ConfirmacionComandaRoute
 }
 
@@ -165,6 +201,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SuperadminRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/login': {
+      id: '/admin/login'
+      path: '/login'
+      fullPath: '/admin/login'
+      preLoaderRoute: typeof AdminLoginRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/confirmacion/$comanda': {
       id: '/confirmacion/$comanda'
       path: '/confirmacion/$comanda'
@@ -172,16 +215,63 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfirmacionComandaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pedido/$numero_comanda': {
+      id: '/pedido/$numero_comanda'
+      path: '/$numero_comanda'
+      fullPath: '/pedido/$numero_comanda'
+      preLoaderRoute: typeof PedidoNumero_comandaRouteImport
+      parentRoute: typeof PedidoRoute
+    }
+    '/superadmin/login': {
+      id: '/superadmin/login'
+      path: '/login'
+      fullPath: '/superadmin/login'
+      preLoaderRoute: typeof SuperadminLoginRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
   }
 }
 
+interface AdminRouteChildren {
+  AdminLoginRoute: typeof AdminLoginRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminLoginRoute: AdminLoginRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
+interface PedidoRouteChildren {
+  PedidoNumero_comandaRoute: typeof PedidoNumero_comandaRoute
+}
+
+const PedidoRouteChildren: PedidoRouteChildren = {
+  PedidoNumero_comandaRoute: PedidoNumero_comandaRoute,
+}
+
+const PedidoRouteWithChildren =
+  PedidoRoute._addFileChildren(PedidoRouteChildren)
+
+interface SuperadminRouteChildren {
+  SuperadminLoginRoute: typeof SuperadminLoginRoute
+}
+
+const SuperadminRouteChildren: SuperadminRouteChildren = {
+  SuperadminLoginRoute: SuperadminLoginRoute,
+}
+
+const SuperadminRouteWithChildren = SuperadminRoute._addFileChildren(
+  SuperadminRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AdminRoute: AdminRoute,
+  AdminRoute: AdminRouteWithChildren,
   MenuRoute: MenuRoute,
-  PedidoRoute: PedidoRoute,
+  PedidoRoute: PedidoRouteWithChildren,
   ProgresoRoute: ProgresoRoute,
-  SuperadminRoute: SuperadminRoute,
+  SuperadminRoute: SuperadminRouteWithChildren,
   ConfirmacionComandaRoute: ConfirmacionComandaRoute,
 }
 export const routeTree = rootRouteImport

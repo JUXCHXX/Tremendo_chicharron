@@ -90,7 +90,7 @@ export function mensajeWhatsApp(pd: Pedido): string {
     ),
     ``,
     `Subtotal: ${formatCOP(pd.subtotal)}`,
-    `Domicilio: por confirmar según dirección`,
+    `Domicilio: ${formatCOP(pd.valor_domicilio)}`,
     `*TOTAL: ${formatCOP(pd.total)}*`,
     ``,
     `Nombre: ${pd.cliente_nombre}`,

@@ -45,21 +45,21 @@ export const CATEGORIAS: Categoria[] = [
     nombre: "Desayunos",
     orden: 1,
     plato_destacado_id: "des-tremendo-chicharron",
-    modelo_3d_url: "/desayunos-tremendo-chicharron.fbx",
+    modelo_3d_url: "/desayunos-tremendo-chicharron.glb",
   },
   {
     id: "almuerzos",
     nombre: "Almuerzos",
     orden: 2,
     plato_destacado_id: "alm-paella",
-    modelo_3d_url: "/almuerzos-tremenda-paella.fbx",
+    modelo_3d_url: "/almuerzos-paella-chicharron.glb",
   },
   {
     id: "picar",
     nombre: "Para Picar / Tardear",
     orden: 3,
     plato_destacado_id: "pic-picada",
-    modelo_3d_url: "/picar-tremenda-picada.fbx",
+    modelo_3d_url: "/picar-tardear-chicharron.glb",
   },
   { id: "bebidas", nombre: "Bebidas", orden: 4, plato_destacado_id: null, modelo_3d_url: null },
 ];
@@ -141,7 +141,7 @@ export const PRODUCTOS: Producto[] = [
     "Tremendo Chicharrón (300g)",
     34000,
     "Arepa, papa salada, plátano maduro, limón, guacamole y barbecue.",
-    { destacado_3d: true, modelo_3d_url: "/desayunos-tremendo-chicharron.fbx" },
+    { destacado_3d: true, modelo_3d_url: "/desayunos-tremendo-chicharron.glb" },
   ),
   p(
     "des-picada",
@@ -173,7 +173,7 @@ export const PRODUCTOS: Producto[] = [
     "Tremenda Paella de Chicharrón",
     34000,
     "Fusión de paella española con chicharrón colombiano y chorizo artesanal, arroz de alta calidad, vegetales, cebolla morada y casco de limón.",
-    { destacado_3d: true, modelo_3d_url: "/almuerzos-tremenda-paella.fbx" },
+    { destacado_3d: true, modelo_3d_url: "/almuerzos-paella-chicharron.glb" },
   ),
   p(
     "alm-picada",
@@ -241,7 +241,7 @@ export const PRODUCTOS: Producto[] = [
     "Tremenda Picada de Chicharrón",
     null,
     "Chicharrón crocante, chorizo, papa salada, plátano maduro, arepa, limón y guacamole.",
-    { por_persona: true, destacado_3d: true, modelo_3d_url: "/picar-tremenda-picada.fbx" },
+    { por_persona: true, destacado_3d: true, modelo_3d_url: "/picar-tardear-chicharron.glb" },
   ),
   p(
     "pic-ceviche",

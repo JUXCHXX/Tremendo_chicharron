@@ -1,8 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckCircle2, MessageCircle } from "lucide-react";
+import { CheckCircle2, Clock } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { useStore } from "@/lib/store";
-import { linkPago, descargarFactura } from "@/lib/documentos";
 import { Model3DPlaceholder } from "@/components/Model3DPlaceholder";
 
 export const Route = createFileRoute("/confirmacion/$comanda")({
@@ -75,35 +74,25 @@ function Confirmacion() {
         )}
       </section>
 
-      <a
-        href={linkPago(pedido)}
-        target="_blank"
-        rel="noreferrer"
-        className="mt-6 flex items-center justify-center gap-3 rounded-2xl bg-brasa py-4 font-display text-2xl text-primary-foreground shadow-glow"
-      >
-        <MessageCircle className="size-6" /> Ir a Pagar
-      </a>
-      <p className="mt-2 text-xs text-muted-foreground">
-        Se abre WhatsApp con el detalle de tu comanda. El pedido se cancela automáticamente si no se
-        confirma el pago en 30 minutos.
-      </p>
-
-      <div className="mt-6 grid grid-cols-2 gap-3">
-        <Link
-          to="/progreso"
-          search={{ comanda: pedido.numero_comanda }}
-          className="rounded-2xl border border-primary/40 py-3 font-display text-lg text-primary"
-        >
-          Ver progreso
-        </Link>
-        <button
-          onClick={() => descargarFactura(pedido)}
-          className="flex items-center justify-center gap-2 rounded-2xl border border-border py-3 font-display text-lg"
-        >
-          <img src="/descargarfactura.png" alt="" className="size-6 rounded" />
-          Factura
-        </button>
+      <div className="mt-6 flex items-start gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 text-left text-sm">
+        <Clock className="size-5 shrink-0 text-primary" />
+        <p>
+          La caja está confirmando el valor del domicilio. En unos minutos podrás pagar desde la
+          pantalla de seguimiento de tu pedido.
+        </p>
       </div>
+
+      <Link
+        to="/pedido/$numero_comanda"
+        params={{ numero_comanda: pedido.numero_comanda }}
+        className="mt-6 block rounded-2xl bg-brasa py-4 text-center font-display text-2xl text-primary-foreground shadow-glow"
+      >
+        Ver estado de mi pedido
+      </Link>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Guárdate el número de comanda. También puedes consultarlo desde cualquier dispositivo con tu
+        número de teléfono.
+      </p>
     </main>
   );
 }

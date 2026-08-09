@@ -7,6 +7,7 @@ import { useSyncExternalStore } from "react";
 import { PRODUCTOS } from "./menu-data";
 
 export type EstadoPedido =
+  | "pendiente_confirmacion_cajera"
   | "pendiente_pago"
   | "pago_confirmado"
   | "en_cocina"
@@ -16,6 +17,7 @@ export type EstadoPedido =
   | "cancelado";
 
 export const ESTADOS_FLUJO: EstadoPedido[] = [
+  "pendiente_confirmacion_cajera",
   "pendiente_pago",
   "pago_confirmado",
   "en_cocina",
@@ -25,6 +27,7 @@ export const ESTADOS_FLUJO: EstadoPedido[] = [
 ];
 
 export const ESTADO_LABEL: Record<EstadoPedido, string> = {
+  pendiente_confirmacion_cajera: "Esperando confirmación de la caja",
   pendiente_pago: "Pendiente de pago",
   pago_confirmado: "Pago confirmado",
   en_cocina: "En cocina",
@@ -131,12 +134,15 @@ function hydrate() {
   autoCancelar();
 }
 
-/** Auto-cancelación: pedidos en pendiente_pago con más de 30 min pasan a cancelado. */
+/** Auto-cancelación: pedidos sin confirmar pago con más de 30 min pasan a cancelado. */
 export function autoCancelar() {
   const ahora = Date.now();
   let cambio = false;
   const pedidos = state.pedidos.map((pd) => {
-    if (pd.estado === "pendiente_pago" && ahora - new Date(pd.creado_en).getTime() > 30 * 60000) {
+    if (
+      (pd.estado === "pendiente_pago" || pd.estado === "pendiente_confirmacion_cajera") &&
+      ahora - new Date(pd.creado_en).getTime() > 30 * 60000
+    ) {
       cambio = true;
       return { ...pd, estado: "cancelado" as EstadoPedido };
     }
@@ -216,7 +222,7 @@ export function crearPedido(data: {
     valor_domicilio: 0,
     subtotal,
     total: subtotal,
-    estado: "pendiente_pago",
+    estado: "pendiente_confirmacion_cajera",
     creado_en: creado.toISOString(),
     editable_hasta: new Date(creado.getTime() + 10 * 60000).toISOString(),
     version: 1,
@@ -224,6 +230,26 @@ export function crearPedido(data: {
   setState((s) => ({ ...s, pedidos: [pedido, ...s.pedidos], cart: [] }));
   return pedido;
 }
+
+/** La cajera confirma el domicilio y pasa el pedido a pendiente_pago. */
+export const confirmarDomicilio = (id: string, valor: number) =>
+  setState((s) => ({
+    ...s,
+    pedidos: s.pedidos.map((pd) =>
+      pd.id === id
+        ? {
+            ...pd,
+            valor_domicilio: valor,
+            total: pd.subtotal + valor,
+            vuelto:
+              pd.monto_efectivo_recibido != null
+                ? pd.monto_efectivo_recibido - (pd.subtotal + valor)
+                : null,
+            estado: "pendiente_pago" as EstadoPedido,
+          }
+        : pd,
+    ),
+  }));
 
 export const getPedido = (numero: string) =>
   state.pedidos.find((pd) => pd.numero_comanda === numero) ?? null;

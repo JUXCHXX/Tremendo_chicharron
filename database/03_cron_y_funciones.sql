@@ -6,7 +6,7 @@
 create extension if not exists pg_cron;
 
 -- ── Auto-cancelación de pedidos sin pago ────────────────────────────────────
--- Pasa a 'cancelado' todo pedido en 'pendiente_pago' con más de 30 minutos.
+-- Pasa a 'cancelado' todo pedido sin pago confirmado con más de 30 minutos.
 create or replace function public.cancelar_pedidos_vencidos()
 returns integer
 language plpgsql
@@ -17,7 +17,7 @@ declare afectados integer;
 begin
   update public.pedidos
      set estado = 'cancelado'
-   where estado = 'pendiente_pago'
+   where estado in ('pendiente_pago','pendiente_confirmacion_cajera')
      and creado_en < now() - interval '30 minutes';
   get diagnostics afectados = row_count;
   return afectados;

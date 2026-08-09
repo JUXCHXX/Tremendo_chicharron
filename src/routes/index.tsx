@@ -35,14 +35,6 @@ function Home() {
 
   return (
     <main className="relative min-h-screen overflow-hidden">
-      <img
-        src="/fondo.png"
-        alt=""
-        aria-hidden
-        className="absolute inset-0 size-full object-cover opacity-40"
-      />
-      <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/70 to-background" />
-
       <div className="relative mx-auto flex min-h-screen max-w-md flex-col items-center px-6 py-12">
         <div className="relative">
           <div className="absolute -inset-3 rounded-full bg-brasa opacity-30 blur-2xl" />
@@ -113,11 +105,11 @@ function Home() {
           </a>
         </div>
 
-        <div className="mt-auto flex items-center gap-3 pt-10">
-          <span className="text-[10px] tracking-widest text-muted-foreground uppercase">
+        <div className="mt-auto flex flex-col items-center gap-3 pt-10">
+          <span className="text-sm font-semibold tracking-[0.3em] text-muted-foreground uppercase">
             Creado por
           </span>
-          <img src="/veltomarca.png" alt="Velto" className="h-7 w-auto" />
+          <img src="/veltomarca.png" alt="Velto" className="h-14 w-auto opacity-90" />
         </div>
       </div>
     </main>

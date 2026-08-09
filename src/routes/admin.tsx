@@ -1,12 +1,14 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Printer, RefreshCcw } from "lucide-react";
+import { estaAutenticado, cerrarSesion } from "@/lib/auth-staff";
 import { formatCOP } from "@/lib/menu-data";
 import {
   ESTADOS_FLUJO,
   ESTADO_LABEL,
   autoCancelar,
   cambiarEstado,
+  confirmarDomicilio,
   editarComanda,
   setDomicilio,
   useStore,
@@ -32,11 +34,24 @@ export const Route = createFileRoute("/admin")({
   component: Admin,
 });
 
-const FILTROS: ("todos" | EstadoPedido)[] = ["todos", ...ESTADOS_FLUJO, "cancelado"];
+const FILTROS: ("todos" | EstadoPedido)[] = [
+  "todos",
+  "pendiente_confirmacion_cajera",
+  ...ESTADOS_FLUJO,
+  "cancelado",
+];
 
 function Admin() {
+  const navigate = useNavigate();
   const pedidos = useStore((s) => s.pedidos);
   const [filtro, setFiltro] = useState<"todos" | EstadoPedido>("todos");
+
+  // Si no hay sesión activa, redirige al login.
+  useEffect(() => {
+    if (!estaAutenticado("caja")) {
+      void navigate({ to: "/admin/login" });
+    }
+  }, [navigate]);
 
   // Cron local: revisa cada minuto los pedidos vencidos (en producción lo hace
   // la Scheduled Function de Supabase definida en /database/03_cron.sql).
@@ -56,9 +71,20 @@ function Admin() {
             Pedidos entrantes, confirmación de pago y comandas
           </p>
         </div>
-        <Link to="/" className="text-sm text-muted-foreground hover:text-primary">
-          ← Inicio
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link to="/" className="text-sm text-muted-foreground hover:text-primary">
+            ← Inicio
+          </Link>
+          <button
+            onClick={() => {
+              cerrarSesion("caja");
+              void navigate({ to: "/admin/login" });
+            }}
+            className="rounded-xl border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-destructive"
+          >
+            Cerrar sesión
+          </button>
+        </div>
       </header>
 
       <div className="flex flex-wrap gap-2">
@@ -117,10 +143,11 @@ function Admin() {
               ))}
             </ul>
 
-            <div className="mt-3 flex items-center gap-2 border-t border-border pt-3 text-sm">
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3 text-sm">
               <label className="flex items-center gap-2">
                 Domicilio
                 <input
+                  data-domicilio={pd.id}
                   type="number"
                   defaultValue={pd.valor_domicilio}
                   onBlur={(e) => setDomicilio(pd.id, Number(e.target.value) || 0)}
@@ -131,6 +158,26 @@ function Admin() {
                 {formatCOP(pd.total)}
               </span>
             </div>
+
+            {pd.estado === "pendiente_confirmacion_cajera" && (
+              <div className="mt-3 rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm">
+                <p className="text-xs text-muted-foreground">
+                  Confirma el valor del domicilio para pasar el pedido a pendiente de pago y
+                  habilitar el botón "Ir a Pagar" del cliente.
+                </p>
+                <button
+                  onClick={() => {
+                    const valorInput = document.querySelector<HTMLInputElement>(
+                      `input[data-domicilio="${pd.id}"]`,
+                    );
+                    confirmarDomicilio(pd.id, Number(valorInput?.value) || 0);
+                  }}
+                  className="mt-2 rounded-xl bg-brasa px-4 py-2 text-sm font-semibold text-primary-foreground"
+                >
+                  Confirmar domicilio y pasar a pago
+                </button>
+              </div>
+            )}
 
             <p className="mt-1 text-xs text-muted-foreground">
               Pago: {pd.medio_pago}

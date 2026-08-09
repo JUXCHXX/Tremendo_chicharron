@@ -1,8 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { formatCOP, dentroDeHorario } from "@/lib/menu-data";
 import { cartTotal, crearPedido, useStore } from "@/lib/store";
+import { getClienteLocal } from "@/lib/clientes";
 
 export const Route = createFileRoute("/pedido")({
   head: () => ({
@@ -43,6 +44,15 @@ function Checkout() {
   const [medio, setMedio] = useState<(typeof MEDIOS)[number]["id"]>("efectivo");
   const [billete, setBillete] = useState("");
   const [error, setError] = useState("");
+
+  // Precarga los datos del cliente guardados en el mini-login.
+  useEffect(() => {
+    const cliente = getClienteLocal();
+    if (cliente) {
+      setNombre(cliente.nombre);
+      setTelefono(cliente.telefono);
+    }
+  }, []);
 
   const recibido = Number(billete.replace(/\D/g, "")) || 0;
   const vuelto = recibido - subtotal;
@@ -103,7 +113,8 @@ function Checkout() {
           <span className="text-primary">{formatCOP(subtotal)}</span>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          El valor del domicilio lo confirma la caja según tu dirección.
+          El valor del domicilio lo confirma la caja según tu dirección. Te avisaremos aquí cuando
+          esté listo para pagar.
         </p>
       </section>
 

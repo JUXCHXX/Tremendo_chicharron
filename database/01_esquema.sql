@@ -12,8 +12,13 @@ exception when duplicate_object then null; end $$;
 
 do $$ begin
   create type public.estado_pedido as enum (
-    'pendiente_pago','pago_confirmado','en_cocina','en_preparacion','en_camino','entregado','cancelado'
+    'pendiente_confirmacion_cajera','pendiente_pago','pago_confirmado','en_cocina','en_preparacion','en_camino','entregado','cancelado'
   );
+exception when duplicate_object then null; end $$;
+
+-- Si el tipo ya existe con el estado anterior, agrégalo:
+do $$ begin
+  alter type public.estado_pedido add value 'pendiente_confirmacion_cajera';
 exception when duplicate_object then null; end $$;
 
 do $$ begin
@@ -158,6 +163,19 @@ grant all on public.promociones to service_role;
 
 create index if not exists idx_promociones_activa on public.promociones(activa);
 
+-- ── clientes ────────────────────────────────────────────────────────────────
+-- Registro del cliente (nombre + teléfono) para precargar sus pedidos.
+create table if not exists public.clientes (
+  id uuid primary key default gen_random_uuid(),
+  nombre text not null,
+  telefono text not null unique,
+  creado_en timestamptz not null default now()
+);
+comment on table public.clientes is 'Clientes registrados desde el mini-login (nombre + teléfono).';
+
+grant select, insert, update on public.clientes to anon, authenticated;
+grant all on public.clientes to service_role;
+
 -- ── pedidos ─────────────────────────────────────────────────────────────────
 create sequence if not exists public.comanda_seq;
 
@@ -182,7 +200,7 @@ create table if not exists public.pedidos (
   valor_domicilio numeric(12,2) not null default 0,
   subtotal numeric(12,2) not null default 0,
   total numeric(12,2) not null default 0,
-  estado public.estado_pedido not null default 'pendiente_pago',
+  estado public.estado_pedido not null default 'pendiente_confirmacion_cajera',
   version int not null default 1,
   creado_en timestamptz not null default now(),
   editable_hasta timestamptz not null default now() + interval '10 minutes'

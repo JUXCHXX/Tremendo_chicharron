@@ -15,6 +15,7 @@ import { addToCart, cartTotal, updateCantidad, useStore } from "@/lib/store";
 import { Model3DPlaceholder } from "@/components/Model3DPlaceholder";
 import { DonVelto } from "@/components/DonVelto";
 import { FooterMenu } from "@/components/Marca";
+import { MiniLoginCliente } from "@/components/MiniLoginCliente";
 
 export const Route = createFileRoute("/menu")({
   head: () => ({
@@ -58,32 +59,43 @@ function Menu() {
 
   return (
     <main className="min-h-screen pb-28">
-      <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-3">
-          <Link to="/" className="text-muted-foreground hover:text-primary" aria-label="Volver">
+      <header className="sticky top-0 z-30 border-b border-primary/20 bg-background/95 shadow-card backdrop-blur-md">
+        <div className="mx-auto flex max-w-4xl items-center gap-4 px-5 py-4">
+          <Link
+            to="/"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-card/80 text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+            aria-label="Volver"
+          >
             <ArrowLeft className="size-5" />
           </Link>
           <img
             src="/logo-tremendochicharron.jpeg"
             alt=""
-            className="size-9 rounded-full border border-primary/50 object-cover"
+            className="size-12 shrink-0 rounded-full border-2 border-primary/60 object-cover shadow-glow"
           />
-          <div className="flex-1">
-            <p className="font-display text-xl leading-none text-primary">Tremendo Chicharrón</p>
-            <p className="text-[11px] text-muted-foreground">
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-display text-2xl leading-none text-primary">
+              Tremendo Chicharrón
+            </p>
+            <p className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span
+                className={`inline-block size-1.5 rounded-full ${
+                  abierto ? "bg-emerald-400" : "bg-destructive"
+                }`}
+              />
               {abierto ? "Abierto · domicilios en Manizales" : "Cerrado · no se reciben pedidos"}
             </p>
           </div>
         </div>
-        <div className="mx-auto flex max-w-4xl gap-2 overflow-x-auto px-4 pb-3">
+        <div className="mx-auto flex max-w-4xl gap-2 overflow-x-auto px-5 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {CATEGORIAS.map((c) => (
             <button
               key={c.id}
               onClick={() => setCat(c.id)}
-              className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+              className={`relative shrink-0 rounded-full px-5 py-2.5 text-sm font-semibold transition-all duration-300 ease-out ${
                 c.id === cat
-                  ? "bg-brasa text-primary-foreground"
-                  : "border border-border bg-card text-muted-foreground hover:text-foreground"
+                  ? "bg-brasa text-primary-foreground shadow-glow"
+                  : "border border-border bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground"
               }`}
             >
               {c.nombre}
@@ -159,6 +171,7 @@ function Menu() {
 
       <FooterMenu />
       <DonVelto />
+      <MiniLoginCliente />
 
       {/* Barra de carrito */}
       {unidades > 0 && (
