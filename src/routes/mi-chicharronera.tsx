@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Truck, Clock, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { getClienteLocal } from "@/lib/clientes";
-import { supabase } from "@/lib/supabase";
+import { usePedidosRealtime, type PedidoDb } from "@/lib/use-pedidos";
 
 export const Route = createFileRoute("/mi-chicharronera")({
   head: () => ({
@@ -15,19 +15,6 @@ export const Route = createFileRoute("/mi-chicharronera")({
   component: MiChicharronera,
 });
 
-interface PedidoDb {
-  id: string;
-  numero_comanda: string;
-  cliente_nombre: string;
-  cliente_telefono: string;
-  direccion_entrega: string;
-  medio_pago: string;
-  valor_domicilio: number;
-  subtotal: number;
-  total: number;
-  estado: string;
-  creado_en: string;
-}
 
 const ESTADO_LABEL: Record<string, string> = {
   pendiente_confirmacion_cajera: "Esperando confirmación de la caja",
@@ -52,51 +39,12 @@ const ESTADO_ICON: Record<string, React.ReactNode> = {
 };
 
 function MiChicharronera() {
-  const [pedidos, setPedidos] = useState<PedidoDb[]>([]);
-  const [cargando, setCargando] = useState(true);
   const [telefono, setTelefono] = useState("");
-
+  const cliente = getClienteLocal();
   useEffect(() => {
-    const cliente = getClienteLocal();
-    if (!cliente) {
-      setCargando(false);
-      return;
-    }
-    setTelefono(cliente.telefono);
-
-    const cargarPedidos = async () => {
-      if (!supabase) {
-        setCargando(false);
-        return;
-      }
-      const { data, error } = await supabase
-        .from("pedidos")
-        .select("*")
-        .eq("cliente_telefono", cliente.telefono)
-        .order("creado_en", { ascending: false })
-        .setHeader("x-cliente-telefono", cliente.telefono);
-      if (!error && data) setPedidos(data as PedidoDb[]);
-      setCargando(false);
-    };
-
-    void cargarPedidos();
-
-    // Suscripción Realtime para actualizaciones en vivo
-    const channel = supabase
-      ?.channel("pedidos-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "pedidos", filter: `cliente_telefono=eq.${cliente.telefono}` },
-        () => {
-          void cargarPedidos();
-        },
-      )
-      .subscribe();
-
-    return () => {
-      if (channel) void supabase?.removeChannel(channel);
-    };
+    if (cliente) setTelefono(cliente.telefono);
   }, []);
+  const { pedidos, cargando } = usePedidosRealtime({ telefono: cliente?.telefono ?? null });
 
   if (cargando) {
     return (

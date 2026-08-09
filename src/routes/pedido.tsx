@@ -61,7 +61,7 @@ function Checkout() {
   const recibido = Number(billete.replace(/\D/g, "")) || 0;
   const vuelto = recibido - subtotal;
 
-  function confirmar() {
+  async function confirmar() {
     if (!nombre.trim() || telefono.trim().length < 7 || !direccion.trim()) {
       setError("Completa nombre, teléfono y dirección de entrega.");
       return;
@@ -71,9 +71,9 @@ function Checkout() {
       return;
     }
     // Guardar cliente en localStorage + Supabase
-    void guardarCliente({ nombre: nombre.trim(), telefono: telefono.trim() });
+    await guardarCliente({ nombre: nombre.trim(), telefono: telefono.trim() });
 
-    const pedido = crearPedido({
+    const pedido = await crearPedido({
       cliente_nombre: nombre.trim(),
       cliente_telefono: telefono.trim(),
       direccion_entrega: direccion.trim(),

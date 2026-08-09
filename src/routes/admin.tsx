@@ -1,19 +1,11 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Printer, RefreshCcw } from "lucide-react";
 import { estaAutenticado, cerrarSesion } from "@/lib/auth-staff";
 import { formatCOP } from "@/lib/menu-data";
-import {
-  ESTADOS_FLUJO,
-  ESTADO_LABEL,
-  autoCancelar,
-  cambiarEstado,
-  confirmarDomicilio,
-  editarComanda,
-  setDomicilio,
-  useStore,
-  type EstadoPedido,
-} from "@/lib/store";
+import { supabase } from "@/lib/supabase";
+import { usePedidosRealtime, type PedidoDb } from "@/lib/use-pedidos";
+import { ESTADOS_FLUJO, ESTADO_LABEL, type EstadoPedido } from "@/lib/store";
 import { imprimirComanda } from "@/lib/documentos";
 
 export const Route = createFileRoute("/admin")({
@@ -43,7 +35,7 @@ export const Route = createFileRoute("/admin")({
   component: Admin,
 });
 
-const FILTROS: ("todos" | EstadoPedido)[] = [
+const FILTROS: ("todos" | string)[] = [
   "todos",
   "pendiente_confirmacion_cajera",
   ...ESTADOS_FLUJO,
@@ -52,18 +44,37 @@ const FILTROS: ("todos" | EstadoPedido)[] = [
 
 function Admin() {
   const navigate = useNavigate();
-  const pedidos = useStore((s) => s.pedidos);
-  const [filtro, setFiltro] = useState<"todos" | EstadoPedido>("todos");
-
-
-  // Cron local: revisa cada minuto los pedidos vencidos (en producción lo hace
-  // la Scheduled Function de Supabase definida en /database/03_cron.sql).
-  useEffect(() => {
-    const t = setInterval(autoCancelar, 60000);
-    return () => clearInterval(t);
-  }, []);
+  const { pedidos } = usePedidosRealtime();
+  const [filtro, setFiltro] = useState<"todos" | string>("todos");
 
   const lista = pedidos.filter((p) => filtro === "todos" || p.estado === filtro);
+
+  // Actualizar estado en Supabase
+  const cambiarEstadoDb = async (id: string, estado: string) => {
+    if (!supabase) return;
+    const { error } = await supabase.from("pedidos").update({ estado }).eq("id", id);
+    if (error) console.error("Error actualizando estado:", error);
+  };
+
+  // Confirmar domicilio y pasar a pendiente_pago
+  const confirmarDomicilioDb = async (id: string, valor: number, pd: PedidoDb) => {
+    if (!supabase) return;
+    const { error } = await supabase
+      .from("pedidos")
+      .update({ valor_domicilio: valor, total: pd.subtotal + valor, estado: "pendiente_pago" })
+      .eq("id", id);
+    if (error) console.error("Error confirmando domicilio:", error);
+  };
+
+  // Actualizar domicilio
+  const setDomicilioDb = async (id: string, valor: number, pd: PedidoDb) => {
+    if (!supabase) return;
+    const { error } = await supabase
+      .from("pedidos")
+      .update({ valor_domicilio: valor, total: pd.subtotal + valor })
+      .eq("id", id);
+    if (error) console.error("Error actualizando domicilio:", error);
+  };
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-4 pb-16">
@@ -99,7 +110,7 @@ function Admin() {
               filtro === f ? "bg-brasa text-primary-foreground" : "border border-border bg-card"
             }`}
           >
-            {f === "todos" ? "Todos" : ESTADO_LABEL[f]}
+            {f === "todos" ? "Todos" : ESTADO_LABEL[f as EstadoPedido] ?? f}
           </button>
         ))}
       </div>
@@ -119,7 +130,7 @@ function Admin() {
                 </p>
               </div>
               <span className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                {ESTADO_LABEL[pd.estado]}
+                {ESTADO_LABEL[pd.estado as EstadoPedido] ?? pd.estado}
               </span>
             </div>
 
@@ -128,23 +139,12 @@ function Admin() {
                 <b>{pd.cliente_nombre}</b> · {pd.cliente_telefono}
               </p>
               <p className="text-muted-foreground">{pd.direccion_entrega}</p>
+              {pd.latitud !== null && pd.longitud !== null && (
+                <p className="text-xs text-muted-foreground">
+                  📍 {pd.latitud.toFixed(5)}, {pd.longitud.toFixed(5)}
+                </p>
+              )}
             </div>
-
-            <ul className="mt-3 space-y-1 border-t border-border pt-3 text-sm">
-              {pd.items.map((i) => (
-                <li key={i.key} className="flex justify-between gap-2">
-                  <span>
-                    {i.cantidad}x {i.nombre}
-                    {i.variante_personas ? ` (${i.variante_personas} pers.)` : ""}
-                    {i.combo ? " + combo" : ""}
-                    {i.notas && (
-                      <em className="block text-xs text-muted-foreground">Nota: {i.notas}</em>
-                    )}
-                  </span>
-                  <span className="text-primary">{formatCOP(i.precio_unitario * i.cantidad)}</span>
-                </li>
-              ))}
-            </ul>
 
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3 text-sm">
               <label className="flex items-center gap-2">
@@ -153,7 +153,7 @@ function Admin() {
                   data-domicilio={pd.id}
                   type="number"
                   defaultValue={pd.valor_domicilio}
-                  onBlur={(e) => setDomicilio(pd.id, Number(e.target.value) || 0)}
+                  onBlur={(e) => setDomicilioDb(pd.id, Number(e.target.value) || 0, pd)}
                   className="w-24 rounded-lg bg-input p-1.5 text-sm outline-none"
                 />
               </label>
@@ -173,7 +173,7 @@ function Admin() {
                     const valorInput = document.querySelector<HTMLInputElement>(
                       `input[data-domicilio="${pd.id}"]`,
                     );
-                    confirmarDomicilio(pd.id, Number(valorInput?.value) || 0);
+                    confirmarDomicilioDb(pd.id, Number(valorInput?.value) || 0, pd);
                   }}
                   className="mt-2 rounded-xl bg-brasa px-4 py-2 text-sm font-semibold text-primary-foreground"
                 >
@@ -191,7 +191,7 @@ function Admin() {
             <div className="mt-4 flex flex-wrap gap-2">
               {pd.estado === "pendiente_pago" && (
                 <button
-                  onClick={() => cambiarEstado(pd.id, "pago_confirmado")}
+                  onClick={() => cambiarEstadoDb(pd.id, "pago_confirmado")}
                   className="rounded-xl bg-brasa px-4 py-2 text-sm font-semibold text-primary-foreground"
                 >
                   Confirmar pago
@@ -200,30 +200,16 @@ function Admin() {
               {ESTADOS_FLUJO.slice(2).map((e) => (
                 <button
                   key={e}
-                  onClick={() => cambiarEstado(pd.id, e)}
+                  onClick={() => cambiarEstadoDb(pd.id, e)}
                   className="rounded-xl border border-border px-3 py-2 text-xs"
                 >
                   {ESTADO_LABEL[e]}
                 </button>
               ))}
               <button
-                onClick={() => imprimirComanda(pd)}
-                className="flex items-center gap-1 rounded-xl border border-primary/40 px-3 py-2 text-xs text-primary"
-              >
-                <Printer className="size-3.5" /> Comanda
-              </button>
-              <button
                 onClick={() => {
-                  editarComanda(pd.id, pd.items, "Reimpresión: versión anterior anulada");
-                  imprimirComanda({ ...pd, version: pd.version + 1 });
+                  void supabase?.from("pedidos").update({ estado: "cancelado" }).eq("id", pd.id);
                 }}
-                className="flex items-center gap-1 rounded-xl border border-border px-3 py-2 text-xs"
-                title="Anula la versión anterior y reimprime con el mismo número"
-              >
-                <RefreshCcw className="size-3.5" /> Reimprimir (anula anterior)
-              </button>
-              <button
-                onClick={() => cambiarEstado(pd.id, "cancelado")}
                 className="rounded-xl border border-destructive/50 px-3 py-2 text-xs text-destructive"
               >
                 Cancelar

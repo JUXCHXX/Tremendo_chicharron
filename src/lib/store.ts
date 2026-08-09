@@ -5,6 +5,7 @@
  */
 import { useSyncExternalStore } from "react";
 import { PRODUCTOS } from "./menu-data";
+import { supabase } from "./supabase";
 
 export type EstadoPedido =
   | "pendiente_confirmacion_cajera"
@@ -203,7 +204,7 @@ function nuevoNumeroComanda(): string {
   return `TC-${stamp}-${String(delDia).padStart(3, "0")}`;
 }
 
-export function crearPedido(data: {
+export async function crearPedido(data: {
   cliente_nombre: string;
   cliente_telefono: string;
   direccion_entrega: string;
@@ -212,7 +213,7 @@ export function crearPedido(data: {
   medio_pago: Pedido["medio_pago"];
   monto_efectivo_recibido: number | null;
   items: CartItem[];
-}): Pedido {
+}): Promise<Pedido> {
   const subtotal = cartTotal(data.items);
   const creado = new Date();
   const pedido: Pedido = {
@@ -233,7 +234,52 @@ export function crearPedido(data: {
     editable_hasta: new Date(creado.getTime() + 10 * 60000).toISOString(),
     version: 1,
   };
+  // Guardar localmente para compatibilidad con el flujo actual
   setState((s) => ({ ...s, pedidos: [pedido, ...s.pedidos], cart: [] }));
+
+  // Insertar en Supabase (pedido + items)
+  if (supabase) {
+    try {
+      const { error: pedidoError } = await supabase.from("pedidos").insert({
+        id: pedido.id,
+        numero_comanda: pedido.numero_comanda,
+        cliente_nombre: pedido.cliente_nombre,
+        cliente_telefono: pedido.cliente_telefono,
+        direccion_entrega: pedido.direccion_entrega,
+        latitud: pedido.latitud,
+        longitud: pedido.longitud,
+        medio_pago: pedido.medio_pago,
+        monto_efectivo_recibido: pedido.monto_efectivo_recibido,
+        vuelto: pedido.vuelto,
+        valor_domicilio: pedido.valor_domicilio,
+        subtotal: pedido.subtotal,
+        total: pedido.total,
+        estado: pedido.estado,
+        version: pedido.version,
+        creado_en: pedido.creado_en,
+        editable_hasta: pedido.editable_hasta,
+      });
+      if (pedidoError) throw pedidoError;
+
+      // Insertar items
+      const { error: itemsError } = await supabase.from("pedido_items").insert(
+        data.items.map((i) => ({
+          pedido_id: pedido.id,
+          producto_id: i.producto_id,
+          nombre_producto: i.nombre,
+          cantidad: i.cantidad,
+          variante_personas: i.variante_personas,
+          combo: i.combo,
+          notas: i.notas,
+          precio_unitario: i.precio_unitario,
+        })),
+      );
+      if (itemsError) throw itemsError;
+    } catch (e) {
+      console.error("Error al insertar pedido en Supabase:", e);
+    }
+  }
+
   return pedido;
 }
 
