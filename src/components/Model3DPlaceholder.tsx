@@ -1,6 +1,5 @@
-import { createElement } from "react";
+import { createElement, useEffect, useState } from "react";
 import { Box } from "lucide-react";
-import "@google/model-viewer";
 
 /**
  * Renderiza un modelo 3D .glb con <model-viewer> de @google/model-viewer.
@@ -16,6 +15,23 @@ export function Model3DPlaceholder({
   label: string;
   size?: "sm" | "md";
 }) {
+  const [modelViewerListo, setModelViewerListo] = useState(false);
+
+  // Importar @google/model-viewer solo en el cliente (usa customElements, no existe en SSR)
+  useEffect(() => {
+    let activo = true;
+    import("@google/model-viewer")
+      .then(() => {
+        if (activo) setModelViewerListo(true);
+      })
+      .catch((e) => {
+        console.error("Error cargando @google/model-viewer:", e);
+      });
+    return () => {
+      activo = false;
+    };
+  }, []);
+
   const esGlb = src.toLowerCase().endsWith(".glb");
 
   return (
@@ -25,7 +41,7 @@ export function Model3DPlaceholder({
       }`}
     >
       <div className="absolute inset-0 bg-brasa opacity-[0.06]" />
-      {esGlb ? (
+      {esGlb && modelViewerListo ? (
         createElement("model-viewer", {
           src,
           alt: label,
@@ -37,6 +53,8 @@ export function Model3DPlaceholder({
           "environment-image": "neutral",
           "interaction-prompt": "none",
           "disable-tap": true,
+          ar: true,
+          "ar-modes": "webxr scene-viewer quick-look",
           loading: "eager",
           reveal: "auto",
           style: { width: "100%", height: "100%", position: "absolute", inset: 0 },

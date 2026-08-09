@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as MenuRouteImport } from './routes/menu'
+import { Route as MiChicharroneraRouteImport } from './routes/mi-chicharronera'
 import { Route as PedidoRouteImport } from './routes/pedido'
 import { Route as ProgresoRouteImport } from './routes/progreso'
 import { Route as SuperadminRouteImport } from './routes/superadmin'
@@ -33,6 +34,11 @@ const AdminRoute = AdminRouteImport.update({
 const MenuRoute = MenuRouteImport.update({
   id: '/menu',
   path: '/menu',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MiChicharroneraRoute = MiChicharroneraRouteImport.update({
+  id: '/mi-chicharronera',
+  path: '/mi-chicharronera',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PedidoRoute = PedidoRouteImport.update({
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/menu': typeof MenuRoute
+  '/mi-chicharronera': typeof MiChicharroneraRoute
   '/pedido': typeof PedidoRouteWithChildren
   '/progreso': typeof ProgresoRoute
   '/superadmin': typeof SuperadminRouteWithChildren
@@ -87,6 +94,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/menu': typeof MenuRoute
+  '/mi-chicharronera': typeof MiChicharroneraRoute
   '/pedido': typeof PedidoRouteWithChildren
   '/progreso': typeof ProgresoRoute
   '/superadmin': typeof SuperadminRouteWithChildren
@@ -100,6 +108,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/menu': typeof MenuRoute
+  '/mi-chicharronera': typeof MiChicharroneraRoute
   '/pedido': typeof PedidoRouteWithChildren
   '/progreso': typeof ProgresoRoute
   '/superadmin': typeof SuperadminRouteWithChildren
@@ -114,6 +123,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/menu'
+    | '/mi-chicharronera'
     | '/pedido'
     | '/progreso'
     | '/superadmin'
@@ -126,6 +136,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/menu'
+    | '/mi-chicharronera'
     | '/pedido'
     | '/progreso'
     | '/superadmin'
@@ -138,6 +149,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/menu'
+    | '/mi-chicharronera'
     | '/pedido'
     | '/progreso'
     | '/superadmin'
@@ -151,6 +163,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
   MenuRoute: typeof MenuRoute
+  MiChicharroneraRoute: typeof MiChicharroneraRoute
   PedidoRoute: typeof PedidoRouteWithChildren
   ProgresoRoute: typeof ProgresoRoute
   SuperadminRoute: typeof SuperadminRouteWithChildren
@@ -178,6 +191,13 @@ declare module '@tanstack/react-router' {
       path: '/menu'
       fullPath: '/menu'
       preLoaderRoute: typeof MenuRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mi-chicharronera': {
+      id: '/mi-chicharronera'
+      path: '/mi-chicharronera'
+      fullPath: '/mi-chicharronera'
+      preLoaderRoute: typeof MiChicharroneraRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pedido': {
@@ -269,6 +289,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
   MenuRoute: MenuRoute,
+  MiChicharroneraRoute: MiChicharroneraRoute,
   PedidoRoute: PedidoRouteWithChildren,
   ProgresoRoute: ProgresoRoute,
   SuperadminRoute: SuperadminRouteWithChildren,

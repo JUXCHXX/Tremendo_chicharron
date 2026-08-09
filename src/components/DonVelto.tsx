@@ -1,35 +1,61 @@
 import { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Loader2 } from "lucide-react";
-import { PRODUCTOS, CATEGORIAS, formatCOP, VARIANTES_PICADA } from "@/lib/menu-data";
+import { formatCOP, VARIANTES_PICADA } from "@/lib/menu-data";
+import { useMenuData } from "@/lib/use-menu-data";
 
 interface Msg {
   role: "user" | "assistant";
   content: string;
 }
 
-const cartaTexto = CATEGORIAS.map(
-  (c) =>
-    `${c.nombre}:\n` +
-    PRODUCTOS.filter((p) => p.categoria_id === c.id)
-      .map(
-        (p) =>
-          `- ${p.nombre} (${p.precio ? formatCOP(p.precio) : "precio por persona"}): ${p.descripcion}`,
-      )
-      .join("\n"),
-).join("\n\n");
+const generarCartaTexto = (
+  categorias: { id: string; nombre: string }[],
+  productos: {
+    categoria_id: string;
+    nombre: string;
+    precio: number | null;
+    descripcion: string;
+  }[],
+) =>
+  categorias
+    .map(
+      (c) =>
+        `${c.nombre}:\n` +
+        productos
+          .filter((p) => p.categoria_id === c.id)
+          .map(
+            (p) =>
+              `- ${p.nombre} (${p.precio ? formatCOP(p.precio) : "precio por persona"}): ${p.descripcion}`,
+          )
+          .join("\n"),
+    )
+    .join("\n\n");
 
-const SYSTEM_PROMPT = `Eres "Don Velto", el mesero virtual de Tremendo Chicharrón, una cocina oculta 100% domicilios en Manizales, Colombia.
+const generarSystemPrompt = (
+  categorias: { id: string; nombre: string }[],
+  productos: {
+    categoria_id: string;
+    nombre: string;
+    precio: number | null;
+    descripcion: string;
+  }[],
+) => {
+  const carta = generarCartaTexto(categorias, productos);
+  return `Eres "Don Velto", el mesero virtual de Tremendo Chicharrón, una cocina oculta 100% domicilios en Manizales, Colombia.
 Hablas en español colombiano, cálido, breve y con chispa paisa. Nunca inventas platos ni precios.
 Recomiendas según antojo, presupuesto y número de personas. Si preguntan por la picada, usas esta tabla por personas: ${VARIANTES_PICADA.map((v) => `${v.personas} pers ${formatCOP(v.precio)}`).join(", ")}.
 Horarios: lunes a jueves 8am-8pm, viernes y sábado 8am-11pm, domingo 7am-4pm.
 Medios de pago: efectivo, transferencia y tarjetas. El pago se confirma por WhatsApp.
-Respuestas de máximo 4 frases. Esta es la carta:\n\n${cartaTexto}`;
+Respuestas de máximo 4 frases. Esta es la carta:\n\n${carta}`;
+};
 
 // Rate limit básico del lado cliente (el definitivo va en la Edge Function).
 const VENTANA_MS = 60000;
 const MAX_MENSAJES = 8;
 
 export function DonVelto() {
+  const { categorias, productos } = useMenuData();
+  const systemPrompt = generarSystemPrompt(categorias, productos);
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -66,7 +92,7 @@ export function DonVelto() {
     setInput("");
     setLoading(true);
 
-    const apiKey = import.meta.env['VITE_GROQ_API_KEY'] as string | undefined;
+    const apiKey = import.meta.env["VITE_GROQ_API_KEY"] as string | undefined;
     if (!apiKey) {
       setMsgs([
         ...nuevos,
@@ -87,7 +113,7 @@ export function DonVelto() {
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
           temperature: 0.7,
-          messages: [{ role: "system", content: SYSTEM_PROMPT }, ...nuevos],
+          messages: [{ role: "system", content: systemPrompt }, ...nuevos],
         }),
       });
       if (res.status === 429) throw new Error("rate");

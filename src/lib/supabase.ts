@@ -6,7 +6,7 @@ const anonKey = import.meta.env["VITE_SUPABASE_ANON_KEY"] as string | undefined;
 export const supabase =
   url && anonKey
     ? createClient(url, anonKey, {
-        auth: { persistSession: false },
+        auth: { persistSession: true, autoRefreshToken: true },
       })
     : null;
 

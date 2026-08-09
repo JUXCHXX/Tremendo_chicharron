@@ -1,45 +1,50 @@
 /**
- * Autenticación simple para los paneles de staff (caja y dueño).
- * Las contraseñas se pueden cambiar editando estas constantes o, en el futuro,
- * migrando a Supabase Auth con la tabla `usuarios`.
+ * Autenticación de staff usando Supabase Auth.
+ * Verifica el rol del usuario autenticado en la tabla `usuarios`
+ * (vinculada a auth.users por user_id).
  */
-
-const KEY_CAJA = "tremendo-auth-caja-v1";
-const KEY_DUENO = "tremendo-auth-dueno-v1";
-
-// TODO: cambiar estas contraseñas en producción
-const PASS_CAJA = "caja2024";
-const PASS_DUENO = "dueno2024";
+import { supabase } from "./supabase";
 
 export type PanelStaff = "caja" | "dueno";
+export type RolUsuario = "admin" | "superadmin";
 
-export function estaAutenticado(panel: PanelStaff): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    const key = panel === "caja" ? KEY_CAJA : KEY_DUENO;
-    return localStorage.getItem(key) === "ok";
-  } catch {
-    return false;
-  }
+export async function obtenerRolUsuario(userId: string): Promise<RolUsuario | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from("usuarios")
+    .select("rol")
+    .eq("user_id", userId)
+    .single();
+  if (error || !data) return null;
+  return data.rol as RolUsuario;
 }
 
-export function iniciarSesion(panel: PanelStaff, password: string): boolean {
-  const valida = panel === "caja" ? password === PASS_CAJA : password === PASS_DUENO;
-  if (!valida) return false;
-  try {
-    const key = panel === "caja" ? KEY_CAJA : KEY_DUENO;
-    localStorage.setItem(key, "ok");
-  } catch {
-    /* ignore */
-  }
-  return true;
+export async function estaAutenticado(panel: PanelStaff): Promise<boolean> {
+  if (!supabase) return false;
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) return false;
+  const rol = await obtenerRolUsuario(data.session.user.id);
+  if (!rol) return false;
+  return panel === "caja" ? rol === "admin" : rol === "superadmin";
 }
 
-export function cerrarSesion(panel: PanelStaff) {
-  try {
-    const key = panel === "caja" ? KEY_CAJA : KEY_DUENO;
-    localStorage.removeItem(key);
-  } catch {
-    /* ignore */
+export async function iniciarSesion(
+  email: string,
+  password: string,
+): Promise<{ ok: boolean; error?: string; rol?: RolUsuario }> {
+  if (!supabase) return { ok: false, error: "Supabase no está configurado." };
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error || !data.user) {
+    return { ok: false, error: error?.message ?? "Credenciales incorrectas." };
   }
+  const rol = await obtenerRolUsuario(data.user.id);
+  if (!rol) {
+    await supabase.auth.signOut();
+    return { ok: false, error: "Tu usuario no tiene un rol asignado en el sistema." };
+  }
+  return { ok: true, rol };
+}
+
+export async function cerrarSesion() {
+  if (supabase) await supabase.auth.signOut();
 }

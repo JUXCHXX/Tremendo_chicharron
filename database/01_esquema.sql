@@ -194,6 +194,8 @@ create table if not exists public.pedidos (
   cliente_nombre text not null,
   cliente_telefono text not null,
   direccion_entrega text not null,
+  latitud numeric(10,7),
+  longitud numeric(10,7),
   medio_pago public.medio_pago not null,
   monto_efectivo_recibido numeric(12,2),
   vuelto numeric(12,2),

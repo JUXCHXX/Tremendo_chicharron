@@ -112,11 +112,14 @@ create policy pedidos_select_staff on public.pedidos
   for select to authenticated
   using (public.es_staff(auth.uid()));
 
--- El cliente anónimo NO puede leer directamente los pedidos:
--- solo puede consultarlos a través de la RPC segura.
+-- El cliente anónimo puede consultar sus propios pedidos por teléfono
+-- (usado por "Mi Chicharronera").
 drop policy if exists pedidos_select_anon on public.pedidos;
 create policy pedidos_select_anon on public.pedidos
-  for select to anon using (false);
+  for select to anon
+  using (
+    cliente_telefono = current_setting('request.headers', true)::jsonb ->> 'x-cliente-telefono'
+  );
 
 -- RPC pública controlada: devuelve el pedido SOLO si coinciden
 -- numero_comanda y cliente_telefono. Devuelve también los ítems.

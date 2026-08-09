@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { formatCOP, dentroDeHorario } from "@/lib/menu-data";
 import { cartTotal, crearPedido, useStore } from "@/lib/store";
-import { getClienteLocal } from "@/lib/clientes";
+import { getClienteLocal, guardarCliente } from "@/lib/clientes";
+import { MapaUbicacion } from "@/components/MapaUbicacion";
 
 export const Route = createFileRoute("/pedido")({
   head: () => ({
@@ -41,6 +42,9 @@ function Checkout() {
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
   const [direccion, setDireccion] = useState("");
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
+  const [mapaAbierto, setMapaAbierto] = useState(false);
   const [medio, setMedio] = useState<(typeof MEDIOS)[number]["id"]>("efectivo");
   const [billete, setBillete] = useState("");
   const [error, setError] = useState("");
@@ -66,6 +70,9 @@ function Checkout() {
       setError("El valor con el que pagas debe ser igual o mayor al total.");
       return;
     }
+    // Guardar cliente en localStorage + Supabase
+    void guardarCliente({ nombre: nombre.trim(), telefono: telefono.trim() });
+
     const pedido = crearPedido({
       cliente_nombre: nombre.trim(),
       cliente_telefono: telefono.trim(),
@@ -73,6 +80,8 @@ function Checkout() {
       medio_pago: medio,
       monto_efectivo_recibido: medio === "efectivo" ? recibido : null,
       items: cart,
+      latitud: lat,
+      longitud: lng,
     });
     void navigate({ to: "/confirmacion/$comanda", params: { comanda: pedido.numero_comanda } });
   }
@@ -132,7 +141,13 @@ function Checkout() {
             Dirección de entrega
           </span>
           <div className="mt-1 flex gap-2">
-            <img src="/ubicacion.png" alt="" className="size-11 rounded-xl" />
+            <button
+              onClick={() => setMapaAbierto(true)}
+              className="shrink-0"
+              aria-label="Seleccionar ubicación en el mapa"
+            >
+              <img src="/ubicacion.png" alt="" className="size-11 rounded-xl" />
+            </button>
             <textarea
               value={direccion}
               onChange={(e) => setDireccion(e.target.value)}
@@ -141,6 +156,11 @@ function Checkout() {
               className="flex-1 rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
+          {lat !== null && lng !== null && (
+            <p className="mt-1 text-xs text-primary">
+              📍 Coordenadas: {lat.toFixed(5)}, {lng.toFixed(5)}
+            </p>
+          )}
         </label>
 
         <div>
@@ -200,6 +220,17 @@ function Checkout() {
           {negocioAbierto ? "Confirmar pedido" : "Cerrado por ahora"}
         </button>
       </section>
+
+      {mapaAbierto && (
+        <MapaUbicacion
+          onUbicacion={(lat, lng, dir) => {
+            setLat(lat);
+            setLng(lng);
+            setDireccion(dir);
+          }}
+          onClose={() => setMapaAbierto(false)}
+        />
+      )}
     </main>
   );
 }

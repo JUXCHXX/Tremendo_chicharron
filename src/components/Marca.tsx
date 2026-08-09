@@ -30,8 +30,8 @@ export function FooterMenu() {
         </div>
 
         {/* Creado por */}
-        <div className="flex flex-col items-center gap-3 border-t border-border pt-8 text-center">
-          <span className="text-sm font-semibold tracking-[0.3em] text-muted-foreground uppercase">
+        <div className="flex items-center justify-between gap-4 border-t border-border pt-8">
+          <span className="text-base font-semibold tracking-[0.3em] text-muted-foreground uppercase">
             Creado por
           </span>
           <img src="/veltomarca.png" alt="Velto" className="h-14 w-auto opacity-90" />

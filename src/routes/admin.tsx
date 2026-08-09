@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Printer, RefreshCcw } from "lucide-react";
 import { estaAutenticado, cerrarSesion } from "@/lib/auth-staff";
@@ -17,6 +17,12 @@ import {
 import { imprimirComanda } from "@/lib/documentos";
 
 export const Route = createFileRoute("/admin")({
+  beforeLoad: async ({ location }) => {
+    const ok = await estaAutenticado("caja");
+    if (!ok) {
+      throw redirect({ to: "/admin/login", search: { from: location.href } });
+    }
+  },
   head: () => ({
     meta: [
       { title: "Panel de caja | Tremendo Chicharrón" },
@@ -46,12 +52,6 @@ function Admin() {
   const pedidos = useStore((s) => s.pedidos);
   const [filtro, setFiltro] = useState<"todos" | EstadoPedido>("todos");
 
-  // Si no hay sesión activa, redirige al login.
-  useEffect(() => {
-    if (!estaAutenticado("caja")) {
-      void navigate({ to: "/admin/login" });
-    }
-  }, [navigate]);
 
   // Cron local: revisa cada minuto los pedidos vencidos (en producción lo hace
   // la Scheduled Function de Supabase definida en /database/03_cron.sql).
@@ -77,7 +77,7 @@ function Admin() {
           </Link>
           <button
             onClick={() => {
-              cerrarSesion("caja");
+              void cerrarSesion();
               void navigate({ to: "/admin/login" });
             }}
             className="rounded-xl border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-destructive"

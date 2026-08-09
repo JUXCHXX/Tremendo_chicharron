@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { UtensilsCrossed, ShoppingBag, Truck, MapPin } from "lucide-react";
+import { UtensilsCrossed, Truck, MapPin } from "lucide-react";
 import { dentroDeHorario, HORARIOS } from "@/lib/menu-data";
 import { useStore } from "@/lib/store";
 
@@ -26,8 +26,7 @@ export const Route = createFileRoute("/")({
 
 const BOTONES = [
   { to: "/menu", label: "Ver Menú", icon: UtensilsCrossed },
-  { to: "/menu", label: "Hacer Pedido", icon: ShoppingBag },
-  { to: "/progreso", label: "Ver Progreso del Pedido", icon: Truck },
+  { to: "/mi-chicharronera", label: "Mi Chicharronera", icon: Truck },
 ] as const;
 
 function Home() {

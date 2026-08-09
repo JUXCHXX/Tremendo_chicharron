@@ -54,6 +54,8 @@ export interface Pedido {
   cliente_nombre: string;
   cliente_telefono: string;
   direccion_entrega: string;
+  latitud: number | null;
+  longitud: number | null;
   medio_pago: "efectivo" | "transferencia" | "tarjeta";
   monto_efectivo_recibido: number | null;
   vuelto: number | null;
@@ -205,6 +207,8 @@ export function crearPedido(data: {
   cliente_nombre: string;
   cliente_telefono: string;
   direccion_entrega: string;
+  latitud?: number | null;
+  longitud?: number | null;
   medio_pago: Pedido["medio_pago"];
   monto_efectivo_recibido: number | null;
   items: CartItem[];
@@ -215,6 +219,8 @@ export function crearPedido(data: {
     id: crypto.randomUUID(),
     numero_comanda: nuevoNumeroComanda(),
     ...data,
+    latitud: data.latitud ?? null,
+    longitud: data.longitud ?? null,
     vuelto:
       data.medio_pago === "efectivo" && data.monto_efectivo_recibido != null
         ? data.monto_efectivo_recibido - subtotal

@@ -1,21 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ArrowLeft, ShoppingBag, Plus, Minus, X } from "lucide-react";
-import {
-  CATEGORIAS,
-  PRODUCTOS,
-  PROMOCIONES,
-  VARIANTES_PICADA,
-  dentroDeHorario,
-  formatCOP,
-  type CategoriaId,
-  type Producto,
-} from "@/lib/menu-data";
+import { VARIANTES_PICADA, dentroDeHorario, formatCOP } from "@/lib/menu-data";
 import { addToCart, cartTotal, updateCantidad, useStore } from "@/lib/store";
+import { useMenuData, type ProductoDb } from "@/lib/use-menu-data";
 import { Model3DPlaceholder } from "@/components/Model3DPlaceholder";
 import { DonVelto } from "@/components/DonVelto";
 import { FooterMenu } from "@/components/Marca";
-import { MiniLoginCliente } from "@/components/MiniLoginCliente";
 
 export const Route = createFileRoute("/menu")({
   head: () => ({
@@ -39,9 +30,9 @@ export const Route = createFileRoute("/menu")({
 });
 
 function Menu() {
-  const [cat, setCat] = useState<CategoriaId>("desayunos");
-  const [promoAbierta, setPromoAbierta] = useState(true);
-  const [seleccion, setSeleccion] = useState<Producto | null>(null);
+  const { categorias, productos, cargando, error } = useMenuData();
+  const [cat, setCat] = useState<string>(categorias[0]?.id ?? "");
+  const [seleccion, setSeleccion] = useState<ProductoDb | null>(null);
   const [carritoAbierto, setCarritoAbierto] = useState(false);
 
   const cart = useStore((s) => s.cart);
@@ -50,12 +41,37 @@ function Menu() {
   const negocioAbierto = useStore((s) => s.config.negocio_abierto);
   const abierto = negocioAbierto && dentroDeHorario();
 
-  const categoria = CATEGORIAS.find((c) => c.id === cat)!;
-  const productos = useMemo(() => PRODUCTOS.filter((p) => p.categoria_id === cat), [cat]);
-  const promo = PROMOCIONES.find((x) => x.activa);
+  const categoria = categorias.find((c) => c.id === cat) ?? categorias[0];
+  const productosFiltrados = useMemo(
+    () => productos.filter((p) => p.categoria_id === categoria?.id),
+    [productos, categoria],
+  );
   const total = cartTotal(cart);
   const unidades = cart.reduce((a, c) => a + c.cantidad, 0);
-  const precioDe = (p: Producto) => precios[p.id] ?? p.precio;
+  const precioDe = (p: ProductoDb) => precios[p.id] ?? p.precio;
+
+  if (cargando) {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <p className="font-display text-2xl text-primary">Cargando menú…</p>
+      </main>
+    );
+  }
+
+  if (error || !categoria) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+        <h1 className="font-display text-3xl text-primary">No se pudo cargar el menú</h1>
+        <p className="text-sm text-muted-foreground">{error ?? "Sin datos disponibles."}</p>
+        <Link
+          to="/"
+          className="rounded-2xl bg-brasa px-6 py-3 font-display text-xl text-primary-foreground"
+        >
+          Volver al inicio
+        </Link>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen pb-28">
@@ -88,12 +104,12 @@ function Menu() {
           </div>
         </div>
         <div className="mx-auto flex max-w-4xl gap-2 overflow-x-auto px-5 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {CATEGORIAS.map((c) => (
+          {categorias.map((c) => (
             <button
               key={c.id}
               onClick={() => setCat(c.id)}
               className={`relative shrink-0 rounded-full px-5 py-2.5 text-sm font-semibold transition-all duration-300 ease-out ${
-                c.id === cat
+                c.id === categoria.id
                   ? "bg-brasa text-primary-foreground shadow-glow"
                   : "border border-border bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground"
               }`}
@@ -119,14 +135,14 @@ function Menu() {
             </p>
             <Model3DPlaceholder
               src={categoria.modelo_3d_url}
-              label={PRODUCTOS.find((p) => p.id === categoria.plato_destacado_id)?.nombre ?? ""}
+              label={productos.find((p) => p.id === categoria.plato_destacado_id)?.nombre ?? ""}
             />
           </section>
         )}
 
         <section className="grid gap-4 sm:grid-cols-2">
-          {productos.map((p) => {
-            const agotado = agotados.includes(p.id);
+          {productosFiltrados.map((p) => {
+            const agotado = agotados.includes(p.id) || !p.disponible;
             const precio = precioDe(p);
             return (
               <article
@@ -138,6 +154,13 @@ function Menu() {
                     src="/soldout.png"
                     alt="Agotado"
                     className="pointer-events-none absolute inset-0 size-full object-cover opacity-80"
+                  />
+                )}
+                {p.imagen_url && (
+                  <img
+                    src={p.imagen_url}
+                    alt=""
+                    className="mb-3 h-32 w-full rounded-xl object-cover"
                   />
                 )}
                 <h2 className="font-display text-2xl leading-tight text-foreground">{p.nombre}</h2>
@@ -171,9 +194,7 @@ function Menu() {
 
       <FooterMenu />
       <DonVelto />
-      <MiniLoginCliente />
 
-      {/* Barra de carrito */}
       {unidades > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-primary/30 bg-card/95 px-4 py-3 backdrop-blur">
           <div className="mx-auto flex max-w-4xl items-center gap-3">
@@ -219,7 +240,7 @@ function Menu() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => updateCantidad(i.key, i.cantidad - 1)}
-                    className="rounded-full border border-border p-1"
+                    className="rounded-full border border-border p-2"
                     aria-label="Quitar uno"
                   >
                     <Minus className="size-4" />
@@ -227,7 +248,7 @@ function Menu() {
                   <span className="w-5 text-center">{i.cantidad}</span>
                   <button
                     onClick={() => updateCantidad(i.key, i.cantidad + 1)}
-                    className="rounded-full border border-border p-1"
+                    className="rounded-full border border-border p-2"
                     aria-label="Agregar uno"
                   >
                     <Plus className="size-4" />
@@ -256,23 +277,6 @@ function Menu() {
           precioBase={precioDe(seleccion)}
           onClose={() => setSeleccion(null)}
         />
-      )}
-
-      {promo && promoAbierta && (
-        <Modal onClose={() => setPromoAbierta(false)} titulo={promo.titulo}>
-          <img
-            src={promo.imagen_url}
-            alt={promo.titulo}
-            className="mb-3 h-40 w-full rounded-xl object-cover"
-          />
-          <p className="text-sm text-muted-foreground">{promo.descripcion}</p>
-          <button
-            onClick={() => setPromoAbierta(false)}
-            className="mt-4 w-full rounded-2xl bg-brasa py-3 font-display text-xl text-primary-foreground"
-          >
-            ¡Quiero verlo!
-          </button>
-        </Modal>
       )}
     </main>
   );
@@ -307,7 +311,7 @@ function AgregarProducto({
   precioBase,
   onClose,
 }: {
-  producto: Producto;
+  producto: ProductoDb;
   precioBase: number | null;
   onClose: () => void;
 }) {
