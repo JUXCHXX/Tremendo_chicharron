@@ -18,9 +18,12 @@ import { imprimirComanda } from "@/lib/documentos";
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async ({ location }) => {
+    // La ruta de login NO se protege — siempre debe mostrar el formulario
+    if (location.pathname.endsWith("/login")) return;
+
     const ok = await estaAutenticado("caja");
     if (!ok) {
-      throw redirect({ to: "/admin/login", search: { from: location.href } });
+      throw redirect({ to: "/admin/login" });
     }
   },
   head: () => ({

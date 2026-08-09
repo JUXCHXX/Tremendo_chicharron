@@ -34,7 +34,13 @@ export function FooterMenu() {
           <span className="text-base font-semibold tracking-[0.3em] text-muted-foreground uppercase">
             Creado por
           </span>
-          <img src="/veltomarca.png" alt="Velto" className="h-14 w-auto opacity-90" />
+          <a
+            href="https://veltoai.digitaluplinkco.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <img src="/veltomarca.png" alt="Velto" className="h-14 w-auto opacity-90 transition-opacity hover:opacity-100" />
+          </a>
         </div>
       </div>
     </footer>

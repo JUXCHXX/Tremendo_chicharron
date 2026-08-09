@@ -19,9 +19,12 @@ import { descargarExcel, descargarPdfReporte } from "@/lib/documentos";
 
 export const Route = createFileRoute("/superadmin")({
   beforeLoad: async ({ location }) => {
+    // La ruta de login NO se protege — siempre debe mostrar el formulario
+    if (location.pathname.endsWith("/login")) return;
+
     const ok = await estaAutenticado("dueno");
     if (!ok) {
-      throw redirect({ to: "/superadmin/login", search: { from: location.href } });
+      throw redirect({ to: "/superadmin/login" });
     }
   },
   head: () => ({

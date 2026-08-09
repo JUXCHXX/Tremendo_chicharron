@@ -152,9 +152,16 @@ export function DonVelto() {
       {open && (
         <div className="fixed right-4 bottom-42 z-50 flex h-[26rem] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-primary/25 bg-popover shadow-glow md:bottom-24">
           <div className="flex items-center gap-3 border-b border-border bg-card px-4 py-3">
-            <div className="flex size-9 items-center justify-center rounded-full bg-brasa font-display text-lg text-primary-foreground">
-              DV
-            </div>
+            <img
+              src="/donvelto.png"
+              alt="Don Velto"
+              className="size-10 rounded-full border-2 border-primary/40 object-cover"
+              onError={(e) => {
+                // Fallback si el archivo donvelto.png aún no se ha subido
+                const img = e.currentTarget;
+                img.style.display = "none";
+              }}
+            />
             <div>
               <p className="font-display text-lg leading-none text-primary">Don Velto</p>
               <p className="text-[11px] text-muted-foreground">Su mesero virtual</p>
