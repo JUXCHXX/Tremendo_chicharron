@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
-import { CATEGORIAS, PRODUCTOS, PROMOCIONES } from "./menu-data";
 
 export interface CategoriaDb {
   id: string;
@@ -34,54 +33,16 @@ export interface PromocionDb {
   activa: boolean;
 }
 
-// Fallback: datos estáticos del menú cuando Supabase no está disponible
-// o no tiene datos sembrados. Esto permite que el menú siempre cargue.
-const FALLBACK_CATEGORIAS: CategoriaDb[] = CATEGORIAS.map((c) => ({
-  id: c.id,
-  nombre: c.nombre,
-  orden: c.orden,
-  plato_destacado_id: c.plato_destacado_id,
-  modelo_3d_url: c.modelo_3d_url,
-}));
-
-const FALLBACK_PRODUCTOS: ProductoDb[] = PRODUCTOS.map((p) => ({
-  id: p.id,
-  categoria_id: p.categoria_id,
-  nombre: p.nombre,
-  descripcion: p.descripcion,
-  precio: p.precio,
-  imagen_url: p.imagen_url,
-  disponible: p.disponible,
-  destacado_3d: p.destacado_3d,
-  modelo_3d_url: p.modelo_3d_url,
-  por_persona: p.por_persona ?? false,
-  combo_gratis: p.combo_gratis ?? false,
-  orden: 0,
-}));
-
-const FALLBACK_PROMOCIONES: PromocionDb[] = PROMOCIONES.map((p) => ({
-  id: p.id,
-  titulo: p.titulo,
-  descripcion: p.descripcion,
-  imagen_url: p.imagen_url,
-  tipo_vigencia: p.tipo_vigencia,
-  activa: p.activa,
-}));
-
 export function useMenuData() {
-  const [categorias, setCategorias] = useState<CategoriaDb[]>(FALLBACK_CATEGORIAS);
-  const [productos, setProductos] = useState<ProductoDb[]>(FALLBACK_PRODUCTOS);
-  const [promociones, setPromociones] = useState<PromocionDb[]>(FALLBACK_PROMOCIONES);
+  const [categorias, setCategorias] = useState<CategoriaDb[]>([]);
+  const [productos, setProductos] = useState<ProductoDb[]>([]);
+  const [promociones, setPromociones] = useState<PromocionDb[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const cargar = async () => {
     if (!supabase) {
-      // Sin Supabase: usar fallback estático
-      setCategorias(FALLBACK_CATEGORIAS);
-      setProductos(FALLBACK_PRODUCTOS);
-      setPromociones(FALLBACK_PROMOCIONES);
-      setError(null);
+      setError("Supabase no está configurado.");
       setCargando(false);
       return;
     }
@@ -96,29 +57,12 @@ export function useMenuData() {
       if (prods.error) throw prods.error;
       if (promos.error) throw promos.error;
 
-      // Si Supabase devuelve datos, usarlos; si no, usar fallback
-      if (cats.data && cats.data.length > 0) {
-        setCategorias(cats.data as CategoriaDb[]);
-      } else {
-        setCategorias(FALLBACK_CATEGORIAS);
-      }
-      if (prods.data && prods.data.length > 0) {
-        setProductos(prods.data as ProductoDb[]);
-      } else {
-        setProductos(FALLBACK_PRODUCTOS);
-      }
-      if (promos.data && promos.data.length > 0) {
-        setPromociones(promos.data as PromocionDb[]);
-      } else {
-        setPromociones(FALLBACK_PROMOCIONES);
-      }
+      setCategorias(cats.data as CategoriaDb[]);
+      setProductos(prods.data as ProductoDb[]);
+      setPromociones(promos.data as PromocionDb[]);
       setError(null);
     } catch (e) {
-      // Si hay error, usar fallback estático
-      setCategorias(FALLBACK_CATEGORIAS);
-      setProductos(FALLBACK_PRODUCTOS);
-      setPromociones(FALLBACK_PROMOCIONES);
-      setError(null);
+      setError(e instanceof Error ? e.message : "Error al cargar el menú.");
     } finally {
       setCargando(false);
     }

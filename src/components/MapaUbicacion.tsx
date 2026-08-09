@@ -14,7 +14,11 @@ export function MapaUbicacion({ onUbicacion, onClose }: Props) {
   const [buscando, setBuscando] = useState(false);
 
   useEffect(() => {
-    if (mapRef.current) return;
+    // Limpiar instancia previa si existe
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+    }
     const map = L.map("mapa-ubicacion").setView([5.0689, -75.5174], 14);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',

@@ -3,7 +3,7 @@ import { Box } from "lucide-react";
 
 /**
  * Renderiza un modelo 3D .glb con <model-viewer> de @google/model-viewer.
- * El loader nativo de .glb no necesita librerías adicionales.
+ * Configura MeshoptDecoder para archivos .glb comprimidos con meshopt (Tripo3D).
  * Si el src no es .glb (ej. .fbx legacy), muestra un placeholder visual.
  */
 export function Model3DPlaceholder({
@@ -17,16 +17,30 @@ export function Model3DPlaceholder({
 }) {
   const [modelViewerListo, setModelViewerListo] = useState(false);
 
-  // Importar @google/model-viewer solo en el cliente (usa customElements, no existe en SSR)
+  // Importar @google/model-viewer + meshoptimizer solo en el cliente
+  // (usa customElements, no existe en SSR)
   useEffect(() => {
     let activo = true;
-    import("@google/model-viewer")
-      .then(() => {
+    (async () => {
+      try {
+        const [modelViewerModule, { MeshoptDecoder }] = await Promise.all([
+          import("@google/model-viewer"),
+          import("meshoptimizer"),
+        ]);
+        // Configurar MeshoptDecoder globalmente ANTES de montar cualquier model-viewer
+        const ModelViewerElement = (
+          modelViewerModule as unknown as {
+            ModelViewerElement?: { meshoptDecoder?: unknown };
+          }
+        ).ModelViewerElement;
+        if (ModelViewerElement) {
+          ModelViewerElement.meshoptDecoder = MeshoptDecoder;
+        }
         if (activo) setModelViewerListo(true);
-      })
-      .catch((e) => {
-        console.error("Error cargando @google/model-viewer:", e);
-      });
+      } catch (e) {
+        console.error("Error cargando model-viewer/meshoptimizer:", e);
+      }
+    })();
     return () => {
       activo = false;
     };

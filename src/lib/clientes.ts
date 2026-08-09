@@ -32,13 +32,16 @@ export function guardarClienteLocal(cliente: Cliente) {
 export async function registrarClienteSupabase(cliente: Cliente): Promise<void> {
   if (!supabase) return;
   try {
-    await supabase.from("clientes").upsert(
-      {
-        nombre: cliente.nombre,
-        telefono: cliente.telefono,
-      },
-      { onConflict: "telefono" },
-    );
+    await supabase
+      .from("clientes")
+      .upsert(
+        {
+          nombre: cliente.nombre,
+          telefono: cliente.telefono,
+        },
+        { onConflict: "telefono", ignoreDuplicates: false },
+      )
+      .setHeader("x-cliente-telefono", cliente.telefono);
   } catch {
     /* no bloquea la experiencia si falla */
   }
