@@ -76,7 +76,7 @@ function Menu() {
   return (
     <main className="min-h-screen pb-28">
       <header className="sticky top-0 z-30 border-b border-primary/20 bg-background/95 shadow-card backdrop-blur-md">
-        <div className="mx-auto flex max-w-4xl items-center gap-4 px-5 py-4">
+        <div className="mx-auto flex max-w-4xl items-center gap-4 px-5 py-5">
           <Link
             to="/"
             className="flex size-10 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-card/80 text-muted-foreground transition-colors hover:border-primary hover:text-primary"
@@ -103,15 +103,15 @@ function Menu() {
             </p>
           </div>
         </div>
-        <div className="mx-auto flex max-w-4xl gap-2 overflow-x-auto px-5 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mx-auto flex max-w-4xl gap-2 overflow-x-auto px-5 pb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {categorias.map((c) => (
             <button
               key={c.id}
               onClick={() => setCat(c.id)}
-              className={`relative shrink-0 rounded-full px-5 py-2.5 text-sm font-semibold transition-all duration-300 ease-out ${
+              className={`relative shrink-0 rounded-full px-5 py-3 text-sm font-semibold transition-all duration-300 ease-out ${
                 c.id === categoria.id
-                  ? "bg-brasa text-primary-foreground shadow-glow"
-                  : "border border-border bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  ? "bg-brasa text-primary-foreground shadow-glow scale-105"
+                  : "border border-border bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground hover:scale-105"
               }`}
             >
               {c.nombre}

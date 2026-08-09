@@ -4,8 +4,21 @@ export function FooterMenu() {
   return (
     <footer className="mt-16 border-t border-border bg-card/60 px-5 py-12">
       <div className="mx-auto max-w-4xl space-y-10 text-sm text-muted-foreground">
+        {/* Links de navegación */}
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          <Link to="/" className="text-primary hover:underline">
+            Inicio
+          </Link>
+          <Link to="/menu" className="text-primary hover:underline">
+            Menú
+          </Link>
+          <Link to="/mi-chicharronera" className="text-primary hover:underline">
+            Mi Chicharronera
+          </Link>
+        </div>
+
         {/* Información institucional (Nosotros) */}
-        <div>
+        <div className="border-t border-border pt-6">
           <h3 className="font-display text-2xl text-primary">Nosotros</h3>
           <ul className="mt-3 space-y-1.5">
             <li>Personal capacitado en BPM (Buenas Prácticas de Manipulación).</li>
@@ -14,19 +27,6 @@ export function FooterMenu() {
             <li>Registrada en la Cámara de Comercio de Manizales.</li>
             <li>Próximamente sedes físicas en Chipre y Milano (Manizales).</li>
           </ul>
-        </div>
-
-        {/* Links de navegación */}
-        <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-6">
-          <Link to="/" className="text-primary hover:underline">
-            Inicio
-          </Link>
-          <Link to="/menu" className="text-primary hover:underline">
-            Menú
-          </Link>
-          <Link to="/progreso" search={{ comanda: "" }} className="text-primary hover:underline">
-            Progreso del pedido
-          </Link>
         </div>
 
         {/* Creado por */}

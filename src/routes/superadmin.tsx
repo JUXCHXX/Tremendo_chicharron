@@ -62,17 +62,17 @@ function SuperAdmin() {
     : null;
   const alertaRespaldo = diasSinRespaldo === null || diasSinRespaldo >= 30;
 
-  // Subir imagen a Supabase Storage
+  // Subir imagen a Supabase Storage (bucket: menu-imagenes)
   const subirImagen = async (file: File): Promise<string | null> => {
     if (!supabase) return null;
     const ext = file.name.split(".").pop() ?? "png";
     const path = `productos/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage.from("imagenes").upload(path, file);
+    const { error } = await supabase.storage.from("menu-imagenes").upload(path, file);
     if (error) {
       setMensaje(`Error al subir imagen: ${error.message}`);
       return null;
     }
-    const { data } = supabase.storage.from("imagenes").getPublicUrl(path);
+    const { data } = supabase.storage.from("menu-imagenes").getPublicUrl(path);
     return data.publicUrl;
   };
 
