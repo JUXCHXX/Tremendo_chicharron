@@ -13,7 +13,12 @@ import {
 import { estaAutenticado, cerrarSesion } from "@/lib/auth-staff";
 import { formatCOP } from "@/lib/menu-data";
 import { supabase } from "@/lib/supabase";
-import { useMenuData, type ProductoDb, type CategoriaDb, type PromocionDb } from "@/lib/use-menu-data";
+import {
+  useMenuData,
+  type ProductoDb,
+  type CategoriaDb,
+  type PromocionDb,
+} from "@/lib/use-menu-data";
 import { marcarRespaldo, useStore } from "@/lib/store";
 import { descargarExcel, descargarPdfReporte } from "@/lib/documentos";
 
@@ -55,7 +60,6 @@ function SuperAdmin() {
   const [creandoPromo, setCreandoPromo] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [mensaje, setMensaje] = useState("");
-
 
   const diasSinRespaldo = config.ultimo_respaldo
     ? Math.floor((Date.now() - new Date(config.ultimo_respaldo).getTime()) / 86400000)
@@ -205,7 +209,13 @@ function SuperAdmin() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => supabase?.from("configuracion").update({ negocio_abierto: !config.negocio_abierto }).eq("id", true).then(() => recargar())}
+            onClick={() =>
+              supabase
+                ?.from("configuracion")
+                .update({ negocio_abierto: !config.negocio_abierto })
+                .eq("id", true)
+                .then(() => recargar())
+            }
             className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold ${
               config.negocio_abierto
                 ? "bg-brasa text-primary-foreground"
@@ -326,9 +336,7 @@ function SuperAdmin() {
         </div>
       )}
 
-      {tab === "estadisticas" && (
-        <Estadisticas />
-      )}
+      {tab === "estadisticas" && <Estadisticas />}
 
       {tab === "promos" && (
         <div className="mt-5">
@@ -420,7 +428,10 @@ function Estadisticas() {
       <div className="grid gap-3 sm:grid-cols-3">
         <Kpi titulo="Ventas" valor={formatCOP(ventas)} />
         <Kpi titulo="Pedidos" valor={String(validos.length)} />
-        <Kpi titulo="Ticket promedio" valor={formatCOP(validos.length ? Math.round(ventas / validos.length) : 0)} />
+        <Kpi
+          titulo="Ticket promedio"
+          valor={formatCOP(validos.length ? Math.round(ventas / validos.length) : 0)}
+        />
       </div>
 
       <section className="rounded-2xl border border-border bg-card p-4">
@@ -583,7 +594,10 @@ function ProductoForm({
           >
             {cargando ? "Guardando…" : "Guardar"}
           </button>
-          <button onClick={onClose} className="w-full rounded-2xl border border-border py-3 text-sm">
+          <button
+            onClick={onClose}
+            className="w-full rounded-2xl border border-border py-3 text-sm"
+          >
             Cancelar
           </button>
         </div>
@@ -662,7 +676,10 @@ function PromoForm({
           >
             {cargando ? "Guardando…" : "Guardar"}
           </button>
-          <button onClick={onClose} className="w-full rounded-2xl border border-border py-3 text-sm">
+          <button
+            onClick={onClose}
+            className="w-full rounded-2xl border border-border py-3 text-sm"
+          >
             Cancelar
           </button>
         </div>

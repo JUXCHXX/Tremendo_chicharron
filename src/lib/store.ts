@@ -394,7 +394,10 @@ export const toggleAgotado = (productoId: string) =>
   }));
 
 export const setPrecio = (productoId: string, precio: number) =>
-  setState((s) => ({ ...s, config: { ...s.config, precios: { ...s.config.precios, [productoId]: precio } } }));
+  setState((s) => ({
+    ...s,
+    config: { ...s.config, precios: { ...s.config.precios, [productoId]: precio } },
+  }));
 
 export const marcarRespaldo = () =>
   setState((s) => ({ ...s, config: { ...s.config, ultimo_respaldo: new Date().toISOString() } }));

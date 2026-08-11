@@ -5,6 +5,11 @@ export interface Cliente {
   telefono: string;
 }
 
+/** Normaliza un teléfono a dígitos solos (sin espacios, guiones, +, etc.) */
+export function normalizarTelefono(telefono: string): string {
+  return telefono.replace(/\D/g, "");
+}
+
 const KEY = "tremendo-chicharron-cliente-v1";
 
 export function getClienteLocal(): Cliente | null {

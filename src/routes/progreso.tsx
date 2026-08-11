@@ -13,7 +13,7 @@ import {
 import { descargarFactura } from "@/lib/documentos";
 
 export const Route = createFileRoute("/progreso")({
-  validateSearch: (s: Record<string, unknown>) => ({ comanda: (s['comanda'] as string) ?? "" }),
+  validateSearch: (s: Record<string, unknown>) => ({ comanda: (s["comanda"] as string) ?? "" }),
   head: () => ({
     meta: [
       { title: "Progreso de tu pedido | Tremendo Chicharrón" },
@@ -34,7 +34,9 @@ function Progreso() {
   const { comanda } = Route.useSearch();
   const [busqueda, setBusqueda] = useState(comanda);
   const pedido = useStore(
-    (s) => s.pedidos.find((p) => p.numero_comanda.toLowerCase() === busqueda.trim().toLowerCase()) ?? null,
+    (s) =>
+      s.pedidos.find((p) => p.numero_comanda.toLowerCase() === busqueda.trim().toLowerCase()) ??
+      null,
   );
 
   return (

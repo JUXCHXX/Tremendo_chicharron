@@ -1,6 +1,7 @@
 import { formatCOP } from "./menu-data";
 import type { Pedido } from "./store";
 import { ESTADO_LABEL } from "./store";
+import { obtenerNit } from "./supabase";
 
 function abrirImpresion(titulo: string, cuerpo: string) {
   const w = window.open("", "_blank", "width=420,height=720");
@@ -17,18 +18,19 @@ function abrirImpresion(titulo: string, cuerpo: string) {
     .tot{font-size:14px;font-weight:700}
     small{color:#555}
   </style></head><body>${cuerpo}
-  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  <script>window.onload=()=>window.print()</script></body></html>`);
   w.document.close();
 }
 
 const filas = (pd: Pedido) =>
   pd.items
     .map(
-      (i) => `<tr><td>${i.cantidad}x ${i.nombre}${
-        i.variante_personas ? ` (${i.variante_personas} pers.)` : ""
-      }${i.combo ? " + combo" : ""}${
-        i.notas ? `<br/><small>Nota: ${i.notas}</small>` : ""
-      }</td><td class="r">${formatCOP(i.precio_unitario * i.cantidad)}</td></tr>`,
+      (i) =>
+        `<tr><td>${i.cantidad}x ${i.nombre}${
+          i.variante_personas ? ` (${i.variante_personas} pers.)` : ""
+        }${i.combo ? " + combo" : ""}${
+          i.notas ? `<br/><small>Nota: ${i.notas}</small>` : ""
+        }</td><td class="r">${formatCOP(i.precio_unitario * i.cantidad)}</td></tr>`,
     )
     .join("");
 
@@ -57,11 +59,12 @@ export function imprimirComanda(pd: Pedido) {
 }
 
 /** Factura del cliente. */
-export function descargarFactura(pd: Pedido) {
+export async function descargarFactura(pd: Pedido) {
+  const nit = await obtenerNit();
   abrirImpresion(
     `Factura ${pd.numero_comanda}`,
     `<h1>Factura de venta</h1>
-     <small>Comercializadora Tremendo Chicharrón SAS · NIT 901.433.592-5</small><hr/>
+     <small>Comercializadora Tremendo Chicharrón SAS · NIT ${nit}</small><hr/>
      <div>Comanda: <b>${pd.numero_comanda}</b></div>
      <div>Fecha: ${new Date(pd.creado_en).toLocaleString("es-CO")}</div>
      <div>Cliente: ${pd.cliente_nombre} · ${pd.cliente_telefono}</div>
@@ -107,14 +110,63 @@ export function mensajeWhatsApp(pd: Pedido): string {
   return lineas.join("\n");
 }
 
+/**
+ * Paso 1 — Mensaje de confirmación de domicilio.
+ * Se envía cuando el pedido está en 'pendiente_confirmacion_cajera'.
+ * NO incluye el valor del domicilio (todavía no se sabe).
+ */
+export function generarMensajeConfirmacionDomicilio(pd: Pedido): string {
+  const totalItems = pd.items.reduce((acc, i) => acc + i.precio_unitario * i.cantidad, 0);
+  return [
+    `*TREMENDO CHICHARRÓN* 🐷`,
+    `Hola, ya hice mi pedido *${pd.numero_comanda}*.`,
+    `Total de items: ${formatCOP(totalItems)}.`,
+    `Espero confirmación del valor del domicilio.`,
+    ``,
+    `Nombre: ${pd.cliente_nombre}`,
+    `Teléfono: ${pd.cliente_telefono}`,
+    `Dirección: ${pd.direccion_entrega}`,
+  ].join("\n");
+}
+
+/**
+ * Paso 2 — Mensaje de pago.
+ * Se envía cuando el pedido está en 'pendiente_pago' (la cajera ya confirmó
+ * el domicilio y el total final está calculado).
+ */
+export function generarMensajePago(pd: Pedido): string {
+  const lineas = [
+    `*TREMENDO CHICHARRÓN* 🐷`,
+    `Hola, número de comanda *${pd.numero_comanda}*.`,
+    `Pedido: ${pd.items.reduce((a, i) => a + i.cantidad, 0)} items.`,
+    `Total con domicilio: *${formatCOP(pd.total)}*.`,
+    `Medio de pago: ${pd.medio_pago}.`,
+  ];
+  if (pd.medio_pago === "efectivo" && pd.monto_efectivo_recibido != null) {
+    lineas.push(
+      `Pago con ${formatCOP(pd.monto_efectivo_recibido)}, necesito ${formatCOP(Math.max(pd.vuelto ?? 0, 0))} de vuelto.`,
+    );
+  }
+  return lineas.join("\n");
+}
+
+/** Link de WhatsApp para el paso 1 (confirmación de domicilio). */
+export function linkConfirmacionDomicilio(pd: Pedido): string {
+  const numero = (import.meta.env["VITE_RESTAURANT_WHATSAPP_NUMBER"] as string | undefined) ?? "";
+  return `https://wa.me/${numero}?text=${encodeURIComponent(generarMensajeConfirmacionDomicilio(pd))}`;
+}
+
+/** Link de WhatsApp para el paso 2 (pago). */
 export function linkPago(pd: Pedido): string {
-  const numero = (import.meta.env['VITE_RESTAURANT_WHATSAPP_NUMBER'] as string | undefined) ?? "";
-  return `https://wa.me/${numero}?text=${encodeURIComponent(mensajeWhatsApp(pd))}`;
+  const numero = (import.meta.env["VITE_RESTAURANT_WHATSAPP_NUMBER"] as string | undefined) ?? "";
+  return `https://wa.me/${numero}?text=${encodeURIComponent(generarMensajePago(pd))}`;
 }
 
 /** Reporte mensual en CSV (abre en Excel). */
 export function descargarExcel(filasCsv: string[][], nombre: string) {
-  const csv = filasCsv.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
+  const csv = filasCsv
+    .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";"))
+    .join("\n");
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);

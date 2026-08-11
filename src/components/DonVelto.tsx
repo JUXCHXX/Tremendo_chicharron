@@ -1,71 +1,23 @@
 import { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Loader2 } from "lucide-react";
-import { formatCOP, VARIANTES_PICADA } from "@/lib/menu-data";
-import { useMenuData } from "@/lib/use-menu-data";
+import { supabase } from "@/lib/supabase";
 
 interface Msg {
   role: "user" | "assistant";
   content: string;
 }
 
-const generarCartaTexto = (
-  categorias: { id: string; nombre: string }[],
-  productos: {
-    categoria_id: string;
-    nombre: string;
-    precio: number | null;
-    descripcion: string;
-  }[],
-) =>
-  categorias
-    .map(
-      (c) =>
-        `${c.nombre}:\n` +
-        productos
-          .filter((p) => p.categoria_id === c.id)
-          .map(
-            (p) =>
-              `- ${p.nombre} (${p.precio ? formatCOP(p.precio) : "precio por persona"}): ${p.descripcion}`,
-          )
-          .join("\n"),
-    )
-    .join("\n\n");
-
-const generarSystemPrompt = (
-  categorias: { id: string; nombre: string }[],
-  productos: {
-    categoria_id: string;
-    nombre: string;
-    precio: number | null;
-    descripcion: string;
-  }[],
-) => {
-  const carta = generarCartaTexto(categorias, productos);
-  return `Eres "Don Velto", el mesero virtual de Tremendo Chicharrón, una cocina oculta 100% domicilios en Manizales, Colombia.
-Hablas en español colombiano, cálido, breve y con chispa paisa. Nunca inventas platos ni precios.
-Recomiendas según antojo, presupuesto y número de personas. Si preguntan por la picada, usas esta tabla por personas: ${VARIANTES_PICADA.map((v) => `${v.personas} pers ${formatCOP(v.precio)}`).join(", ")}.
-Horarios: lunes a jueves 8am-8pm, viernes y sábado 8am-11pm, domingo 7am-4pm.
-Medios de pago: efectivo, transferencia y tarjetas. El pago se confirma por WhatsApp.
-Respuestas de máximo 4 frases. Esta es la carta:\n\n${carta}`;
-};
-
-// Rate limit básico del lado cliente (el definitivo va en la Edge Function).
-const VENTANA_MS = 60000;
-const MAX_MENSAJES = 8;
-
 export function DonVelto() {
-  const { categorias, productos } = useMenuData();
-  const systemPrompt = generarSystemPrompt(categorias, productos);
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([
     {
       role: "assistant",
-      content: "¡Quiubo pues! Soy Don Velto 🐷 ¿Le antojo algo tremendo? Dígame para cuántos y con cuánto cuenta.",
+      content:
+        "¡Quiubo pues! Soy Don Velto 🐷 ¿Le antojo algo tremendo? Dígame para cuántos y con cuánto cuenta.",
     },
   ]);
-  const stamps = useRef<number[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -76,30 +28,17 @@ export function DonVelto() {
     const texto = input.trim();
     if (!texto || loading) return;
 
-    const ahora = Date.now();
-    stamps.current = stamps.current.filter((t) => ahora - t < VENTANA_MS);
-    if (stamps.current.length >= MAX_MENSAJES) {
-      setMsgs((m) => [
-        ...m,
-        { role: "assistant", content: "Despacio mijo, deme un minutico y seguimos 😄" },
-      ]);
-      return;
-    }
-    stamps.current.push(ahora);
-
     const nuevos: Msg[] = [...msgs, { role: "user", content: texto }];
     setMsgs(nuevos);
     setInput("");
     setLoading(true);
 
-    const apiKey = import.meta.env["VITE_GROQ_API_KEY"] as string | undefined;
-    if (!apiKey) {
+    if (!supabase) {
       setMsgs([
         ...nuevos,
         {
           role: "assistant",
-          content:
-            "Aún no tengo configurada mi llave de IA (VITE_GROQ_API_KEY). Agrégala en el .env y vuelvo a atenderte.",
+          content: "Aún no tengo configurada mi conexión. Verifica que Supabase esté configurado.",
         },
       ]);
       setLoading(false);
@@ -107,31 +46,39 @@ export function DonVelto() {
     }
 
     try {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          temperature: 0.7,
-          messages: [{ role: "system", content: systemPrompt }, ...nuevos],
-        }),
+      const { data, error } = await supabase.functions.invoke("chat-don-velto", {
+        body: { messages: nuevos },
       });
-      if (res.status === 429) throw new Error("rate");
-      if (!res.ok) throw new Error(String(res.status));
-      const data = await res.json();
-      setMsgs([
-        ...nuevos,
-        { role: "assistant", content: data.choices?.[0]?.message?.content ?? "..." },
-      ]);
-    } catch (e) {
+
+      if (error) {
+        if (error.context?.status === 429) {
+          setMsgs([
+            ...nuevos,
+            {
+              role: "assistant",
+              content: "Estoy atendiendo muchas mesas, intente en un momentico.",
+            },
+          ]);
+        } else {
+          setMsgs([
+            ...nuevos,
+            {
+              role: "assistant",
+              content: "Se me enredó la bandeja 😅 Intente de nuevo o escríbanos por WhatsApp.",
+            },
+          ]);
+        }
+        return;
+      }
+
+      const content = data?.choices?.[0]?.message?.content ?? "...";
+      setMsgs([...nuevos, { role: "assistant", content }]);
+    } catch {
       setMsgs([
         ...nuevos,
         {
           role: "assistant",
-          content:
-            (e as Error).message === "rate"
-              ? "Estoy atendiendo muchas mesas, intente en un momentico."
-              : "Se me enredó la bandeja 😅 Intente de nuevo o escríbanos por WhatsApp.",
+          content: "Se me enredó la bandeja 😅 Intente de nuevo o escríbanos por WhatsApp.",
         },
       ]);
     } finally {
@@ -144,20 +91,33 @@ export function DonVelto() {
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label="Abrir chat con Don Velto"
-        className="fixed right-4 bottom-24 z-50 flex size-14 items-center justify-center rounded-full bg-brasa text-primary-foreground shadow-glow transition-transform hover:scale-105 md:bottom-6"
+        className="fixed right-4 bottom-24 z-50 flex size-14 items-center justify-center overflow-hidden rounded-full border-2 border-primary/50 bg-card shadow-glow transition-transform hover:scale-105 md:bottom-6"
       >
-        {open ? <X className="size-6" /> : <MessageCircle className="size-6" />}
+        {open ? (
+          <X className="size-6 text-primary" />
+        ) : (
+          <img
+            src="/velto.png"
+            alt="Don Velto"
+            className="size-full object-cover"
+            onError={(e) => {
+              const img = e.currentTarget;
+              img.style.display = "none";
+              img.parentElement?.classList.add("bg-brasa");
+            }}
+          />
+        )}
       </button>
 
       {open && (
         <div className="fixed right-4 bottom-42 z-50 flex h-[26rem] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-primary/25 bg-popover shadow-glow md:bottom-24">
           <div className="flex items-center gap-3 border-b border-border bg-card px-4 py-3">
             <img
-              src="/donvelto.png"
+              src="/velto.png"
               alt="Don Velto"
               className="size-10 rounded-full border-2 border-primary/40 object-cover"
               onError={(e) => {
-                // Fallback si el archivo donvelto.png aún no se ha subido
+                // Fallback si el archivo velto.png no se puede cargar
                 const img = e.currentTarget;
                 img.style.display = "none";
               }}

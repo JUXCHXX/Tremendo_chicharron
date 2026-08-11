@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ShoppingBag, Plus, Minus, X } from "lucide-react";
 import { VARIANTES_PICADA, dentroDeHorario, formatCOP } from "@/lib/menu-data";
 import { addToCart, cartTotal, updateCantidad, useStore } from "@/lib/store";
@@ -34,6 +34,14 @@ function Menu() {
   const [cat, setCat] = useState<string>(categorias[0]?.id ?? "");
   const [seleccion, setSeleccion] = useState<ProductoDb | null>(null);
   const [carritoAbierto, setCarritoAbierto] = useState(false);
+
+  // Alterna entre las dos sub-marcas con crossfade
+  const [submarca, setSubmarca] = useState(0);
+  const SUBMARCAS = ["Tremendo Chicharrón", "Tremendo Calentado"];
+  useEffect(() => {
+    const t = setInterval(() => setSubmarca((s) => (s + 1) % SUBMARCAS.length), 4000);
+    return () => clearInterval(t);
+  }, []);
 
   const cart = useStore((s) => s.cart);
   const agotados = useStore((s) => s.config.agotados);
@@ -100,6 +108,9 @@ function Menu() {
                 }`}
               />
               {abierto ? "Abierto · domicilios en Manizales" : "Cerrado · no se reciben pedidos"}
+            </p>
+            <p className="mt-1 inline-block rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary transition-opacity duration-500">
+              {SUBMARCAS[submarca]}
             </p>
           </div>
         </div>
@@ -235,7 +246,9 @@ function Menu() {
                   </p>
                   {i.combo && <p className="text-xs text-accent">Con combo incluido</p>}
                   {i.notas && <p className="text-xs text-muted-foreground">Nota: {i.notas}</p>}
-                  <p className="text-sm text-primary">{formatCOP(i.precio_unitario * i.cantidad)}</p>
+                  <p className="text-sm text-primary">
+                    {formatCOP(i.precio_unitario * i.cantidad)}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button

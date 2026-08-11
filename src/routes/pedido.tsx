@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { formatCOP, dentroDeHorario } from "@/lib/menu-data";
 import { cartTotal, crearPedido, useStore } from "@/lib/store";
-import { getClienteLocal, guardarCliente } from "@/lib/clientes";
+import { getClienteLocal, guardarCliente, normalizarTelefono } from "@/lib/clientes";
 import { MapaUbicacion } from "@/components/MapaUbicacion";
 
 export const Route = createFileRoute("/pedido")({
@@ -70,12 +70,13 @@ function Checkout() {
       setError("El valor con el que pagas debe ser igual o mayor al total.");
       return;
     }
-    // Guardar cliente en localStorage + Supabase
-    await guardarCliente({ nombre: nombre.trim(), telefono: telefono.trim() });
+    // Guardar cliente en localStorage + Supabase (teléfono normalizado)
+    const telefonoNormalizado = normalizarTelefono(telefono);
+    await guardarCliente({ nombre: nombre.trim(), telefono: telefonoNormalizado });
 
     const pedido = await crearPedido({
       cliente_nombre: nombre.trim(),
-      cliente_telefono: telefono.trim(),
+      cliente_telefono: telefonoNormalizado,
       direccion_entrega: direccion.trim(),
       medio_pago: medio,
       monto_efectivo_recibido: medio === "efectivo" ? recibido : null,
@@ -90,7 +91,10 @@ function Checkout() {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
         <h1 className="font-display text-3xl text-primary">Tu carrito está vacío</h1>
-        <Link to="/menu" className="rounded-2xl bg-brasa px-6 py-3 font-display text-xl text-primary-foreground">
+        <Link
+          to="/menu"
+          className="rounded-2xl bg-brasa px-6 py-3 font-display text-xl text-primary-foreground"
+        >
           Ir al menú
         </Link>
       </main>
@@ -173,7 +177,9 @@ function Checkout() {
                 key={m.id}
                 onClick={() => setMedio(m.id)}
                 className={`flex flex-col items-center gap-2 rounded-2xl border p-3 text-xs font-semibold ${
-                  medio === m.id ? "border-primary bg-primary/10 text-primary" : "border-border bg-card"
+                  medio === m.id
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-card"
                 }`}
               >
                 <img src={m.icono} alt="" className="size-8 rounded-lg" />

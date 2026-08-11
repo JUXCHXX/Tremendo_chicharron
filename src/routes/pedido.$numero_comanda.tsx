@@ -4,7 +4,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { ArrowLeft, Search, MessageCircle, Clock } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { supabase } from "@/lib/supabase";
-import { linkPago } from "@/lib/documentos";
+import { linkConfirmacionDomicilio, linkPago } from "@/lib/documentos";
 import { ESTADOS_FLUJO, ESTADO_LABEL, type Pedido } from "@/lib/store";
 
 export const Route = createFileRoute("/pedido/$numero_comanda")({
@@ -90,13 +90,10 @@ function ConsultarPedido() {
       }
       // Consulta pública segura vía RPC: valida que numero_comanda y telefono
       // coincidan antes de devolver el pedido (nunca expone pedidos ajenos).
-      const { data, error: err } = await supabase.rpc(
-        "consultar_pedido_por_comanda_y_telefono",
-        {
-          p_numero_comanda: numero_comanda,
-          p_telefono: telefono.trim(),
-        },
-      );
+      const { data, error: err } = await supabase.rpc("consultar_pedido_por_comanda_y_telefono", {
+        p_numero_comanda: numero_comanda,
+        p_telefono: telefono.trim(),
+      });
 
       if (err) throw err;
       if (!data) {
@@ -104,7 +101,9 @@ function ConsultarPedido() {
         return;
       }
 
-      const pedidoRaw = (data as { pedido: Record<string, unknown>; items: Record<string, unknown>[] }).pedido;
+      const pedidoRaw = (
+        data as { pedido: Record<string, unknown>; items: Record<string, unknown>[] }
+      ).pedido;
       const itemsRaw = (
         data as { pedido: Record<string, unknown>; items: Record<string, unknown>[] }
       ).items;
@@ -118,6 +117,8 @@ function ConsultarPedido() {
         cliente_nombre: String(pedidoObj["cliente_nombre"]),
         cliente_telefono: String(pedidoObj["cliente_telefono"]),
         direccion_entrega: String(pedidoObj["direccion_entrega"]),
+        latitud: pedidoObj["latitud"] != null ? Number(pedidoObj["latitud"]) : null,
+        longitud: pedidoObj["longitud"] != null ? Number(pedidoObj["longitud"]) : null,
         medio_pago: pedidoObj["medio_pago"] as Pedido["medio_pago"],
         monto_efectivo_recibido:
           pedidoObj["monto_efectivo_recibido"] != null
@@ -131,18 +132,16 @@ function ConsultarPedido() {
         creado_en: String(pedidoObj["creado_en"]),
         editable_hasta: String(pedidoObj["editable_hasta"]),
         version: Number(pedidoObj["version"] ?? 1),
-        items: (itemsRaw ?? []).map(
-          (i: Record<string, unknown>): Pedido["items"][number] => ({
-            key: String(i["id"]),
-            producto_id: i["producto_id"] ? String(i["producto_id"]) : "",
-            nombre: String(i["nombre_producto"]),
-            cantidad: Number(i["cantidad"] ?? 0),
-            variante_personas: i["variante_personas"] != null ? Number(i["variante_personas"]) : null,
-            notas: String(i["notas"] ?? ""),
-            precio_unitario: Number(i["precio_unitario"] ?? 0),
-            combo: Boolean(i["combo"]),
-          }),
-        ),
+        items: (itemsRaw ?? []).map((i: Record<string, unknown>): Pedido["items"][number] => ({
+          key: String(i["id"]),
+          producto_id: i["producto_id"] ? String(i["producto_id"]) : "",
+          nombre: String(i["nombre_producto"]),
+          cantidad: Number(i["cantidad"] ?? 0),
+          variante_personas: i["variante_personas"] != null ? Number(i["variante_personas"]) : null,
+          notas: String(i["notas"] ?? ""),
+          precio_unitario: Number(i["precio_unitario"] ?? 0),
+          combo: Boolean(i["combo"]),
+        })),
       };
       setPedido(pedidoCompleto);
       setConsultado(true);
@@ -259,13 +258,23 @@ function DetallePedido({ pedido }: { pedido: Pedido }) {
       )}
 
       {pedido.estado === "pendiente_confirmacion_cajera" && (
-        <div className="mt-6 flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 text-sm">
-          <Clock className="size-5 shrink-0 text-primary" />
-          <p>
-            La caja está confirmando el valor del domicilio. En unos minutos aparecerá el botón
-            para pagar.
-          </p>
-        </div>
+        <>
+          <div className="mt-6 flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 text-sm">
+            <Clock className="size-5 shrink-0 text-primary" />
+            <p>
+              La caja está confirmando el valor del domicilio. En unos minutos aparecerá el botón
+              para pagar.
+            </p>
+          </div>
+          <a
+            href={linkConfirmacionDomicilio(pedido)}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-4 flex items-center justify-center gap-3 rounded-2xl bg-brasa py-4 font-display text-2xl text-primary-foreground shadow-glow"
+          >
+            <MessageCircle className="size-6" /> Enviar para confirmación de domicilio
+          </a>
+        </>
       )}
     </>
   );

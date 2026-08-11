@@ -42,17 +42,17 @@ export const VARIANTES_PICADA: { personas: number; precio: number }[] = [
 export const CATEGORIAS: Categoria[] = [
   {
     id: "desayunos",
-    nombre: "Desayunos",
+    nombre: "Tremendo Calentado",
     orden: 1,
-    plato_destacado_id: "des-tremendo-chicharron",
-    modelo_3d_url: "/desayunos-tremendo-chicharron.glb",
+    plato_destacado_id: "des-calentado-paisa",
+    modelo_3d_url: "/desayunos-tremendo-calentado-paisa.glb",
   },
   {
     id: "almuerzos",
-    nombre: "Almuerzos",
+    nombre: "Tremendo Chicharrón",
     orden: 2,
-    plato_destacado_id: "alm-paella",
-    modelo_3d_url: "/almuerzos-paella-chicharron.glb",
+    plato_destacado_id: "alm-bowl-montanero",
+    modelo_3d_url: "/almuerzos-bowl-montanero.glb",
   },
   {
     id: "picar",

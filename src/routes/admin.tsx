@@ -110,7 +110,7 @@ function Admin() {
               filtro === f ? "bg-brasa text-primary-foreground" : "border border-border bg-card"
             }`}
           >
-            {f === "todos" ? "Todos" : ESTADO_LABEL[f as EstadoPedido] ?? f}
+            {f === "todos" ? "Todos" : (ESTADO_LABEL[f as EstadoPedido] ?? f)}
           </button>
         ))}
       </div>

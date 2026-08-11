@@ -11,3 +11,21 @@ export const supabase =
     : null;
 
 export const supabaseDisponible = () => supabase !== null;
+
+const NIT_FALLBACK = "901.433.592-5";
+
+/** Obtiene el NIT desde la tabla `configuracion` (con fallback hardcodeado). */
+export async function obtenerNit(): Promise<string> {
+  if (!supabase) return NIT_FALLBACK;
+  try {
+    const { data, error } = await supabase
+      .from("configuracion")
+      .select("nit")
+      .eq("id", true)
+      .single();
+    if (error || !data?.nit) return NIT_FALLBACK;
+    return data.nit as string;
+  } catch {
+    return NIT_FALLBACK;
+  }
+}

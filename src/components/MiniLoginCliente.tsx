@@ -2,11 +2,7 @@ import { useEffect, useState } from "react";
 import { User, Phone, X } from "lucide-react";
 import { getClienteLocal, guardarCliente, type Cliente } from "@/lib/clientes";
 
-export function MiniLoginCliente({
-  onGuardado,
-}: {
-  onGuardado?: (cliente: Cliente) => void;
-}) {
+export function MiniLoginCliente({ onGuardado }: { onGuardado?: (cliente: Cliente) => void }) {
   const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");

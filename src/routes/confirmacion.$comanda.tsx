@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckCircle2, Clock } from "lucide-react";
+import { CheckCircle2, Clock, MessageCircle } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { useStore } from "@/lib/store";
 import { Model3DPlaceholder } from "@/components/Model3DPlaceholder";
+import { linkConfirmacionDomicilio } from "@/lib/documentos";
 
 export const Route = createFileRoute("/confirmacion/$comanda")({
   head: () => ({
@@ -29,7 +30,10 @@ function Confirmacion() {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
         <h1 className="font-display text-3xl text-primary">No encontramos esa comanda</h1>
-        <Link to="/menu" className="rounded-2xl bg-brasa px-6 py-3 font-display text-xl text-primary-foreground">
+        <Link
+          to="/menu"
+          className="rounded-2xl bg-brasa px-6 py-3 font-display text-xl text-primary-foreground"
+        >
           Volver al menú
         </Link>
       </main>
@@ -48,8 +52,8 @@ function Confirmacion() {
       </p>
 
       <div className="mt-6 grid grid-cols-2 gap-3">
-        <Model3DPlaceholder src="/Medalla.fbx" label="Medalla" size="sm" />
-        <Model3DPlaceholder src="/Corona.fbx" label="Corona" size="sm" />
+        <Model3DPlaceholder src="/Medalla.glb" label="Medalla" size="sm" />
+        <Model3DPlaceholder src="/Corona.glb" label="Corona" size="sm" />
       </div>
 
       <section className="mt-6 rounded-2xl border border-border bg-card p-4 text-left text-sm">
@@ -81,6 +85,17 @@ function Confirmacion() {
           pantalla de seguimiento de tu pedido.
         </p>
       </div>
+
+      {pedido.estado === "pendiente_confirmacion_cajera" && (
+        <a
+          href={linkConfirmacionDomicilio(pedido)}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-4 flex items-center justify-center gap-3 rounded-2xl bg-brasa py-4 font-display text-2xl text-primary-foreground shadow-glow"
+        >
+          <MessageCircle className="size-6" /> Enviar para confirmación de domicilio
+        </a>
+      )}
 
       <Link
         to="/pedido/$numero_comanda"
