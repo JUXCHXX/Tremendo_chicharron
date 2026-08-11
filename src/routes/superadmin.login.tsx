@@ -4,6 +4,10 @@ import { Lock, ArrowLeft } from "lucide-react";
 import { iniciarSesion } from "@/lib/auth-staff";
 
 export const Route = createFileRoute("/superadmin/login")({
+  validateSearch: (s: Record<string, unknown>) => {
+    const e = s["error"];
+    return typeof e === "string" && e ? { error: e } : {};
+  },
   head: () => ({
     meta: [{ title: "Acceso dueño | Tremendo Chicharrón" }, { name: "robots", content: "noindex" }],
   }),
@@ -12,9 +16,10 @@ export const Route = createFileRoute("/superadmin/login")({
 
 function SuperAdminLogin() {
   const navigate = useNavigate();
+  const { error: errorParam } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(errorParam);
   const [cargando, setCargando] = useState(false);
 
   async function entrar() {
@@ -24,14 +29,10 @@ function SuperAdminLogin() {
     }
     setCargando(true);
     setError("");
-    const res = await iniciarSesion(email.trim(), password);
+    const res = await iniciarSesion(email.trim(), password, "superadmin");
     setCargando(false);
     if (!res.ok) {
       setError(res.error ?? "Error al iniciar sesión.");
-      return;
-    }
-    if (res.rol !== "superadmin") {
-      setError("Este usuario no tiene permisos de dueño (rol 'superadmin').");
       return;
     }
     void navigate({ to: "/superadmin" });

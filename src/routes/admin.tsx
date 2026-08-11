@@ -15,7 +15,12 @@ export const Route = createFileRoute("/admin")({
 
     const ok = await estaAutenticado("caja");
     if (!ok) {
-      throw redirect({ to: "/admin/login" });
+      throw redirect({
+        to: "/admin/login",
+        search: {
+          error: "Sesión no válida o no tienes permisos de administrador.",
+        },
+      });
     }
   },
   head: () => ({

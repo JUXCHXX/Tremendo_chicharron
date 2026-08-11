@@ -210,3 +210,27 @@
   background-size: 200% 100%;
   animation: shimmer 2.5s linear infinite;
 }
+
+/* Entrada animada para los modelos 3D de la confirmación */
+@keyframes entrada-modelo {
+  0% {
+    opacity: 0;
+    transform: translateY(40px) scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@utility animate-entrada-modelo {
+  animation: entrada-modelo 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility animate-entrada-modelo-delay {
+  animation: entrada-modelo 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
+}

@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { CheckCircle2, Clock, MessageCircle } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { useStore } from "@/lib/store";
@@ -26,6 +27,67 @@ function Confirmacion() {
   const { comanda } = Route.useParams();
   const pedido = useStore((s) => s.pedidos.find((p) => p.numero_comanda === comanda) ?? null);
 
+  // Confeti de celebración al cargar la pantalla
+  useEffect(() => {
+    let activo = true;
+    let limpiar: (() => void) | undefined;
+
+    // Import dinámico para no bloquear el bundle inicial ni la carga de los modelos 3D
+    import("canvas-confetti").then((mod) => {
+      if (!activo) return;
+      const confetti = mod.default;
+
+      // Estallido central
+      confetti({
+        particleCount: 120,
+        spread: 75,
+        origin: { y: 0.6 },
+        colors: ["#f5c542", "#e8a020", "#d97706", "#fbbf24", "#fde68a"],
+        zIndex: 9999,
+      });
+
+      // Lluvia lateral izquierda
+      setTimeout(() => {
+        confetti({
+          particleCount: 60,
+          angle: 60,
+          spread: 60,
+          origin: { x: 0, y: 0.7 },
+          colors: ["#f5c542", "#e8a020", "#d97706", "#fbbf24", "#fde68a"],
+          zIndex: 9999,
+        });
+      }, 250);
+
+      // Lluvia lateral derecha
+      setTimeout(() => {
+        confetti({
+          particleCount: 60,
+          angle: 120,
+          spread: 60,
+          origin: { x: 1, y: 0.7 },
+          colors: ["#f5c542", "#e8a020", "#d97706", "#fbbf24", "#fde68a"],
+          zIndex: 9999,
+        });
+      }, 500);
+
+      // Última ráfaga arriba
+      setTimeout(() => {
+        confetti({
+          particleCount: 80,
+          spread: 100,
+          origin: { y: 0.2 },
+          colors: ["#f5c542", "#e8a020", "#d97706", "#fbbf24", "#fde68a"],
+          zIndex: 9999,
+        });
+      }, 800);
+    });
+
+    return () => {
+      activo = false;
+      limpiar?.();
+    };
+  }, []);
+
   if (!pedido) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
@@ -52,8 +114,12 @@ function Confirmacion() {
       </p>
 
       <div className="mt-6 grid grid-cols-2 gap-3">
-        <Model3DPlaceholder src="/Medalla.glb" label="Medalla" size="sm" />
-        <Model3DPlaceholder src="/Corona.glb" label="Corona" size="sm" />
+        <div className="animate-entrada-modelo">
+          <Model3DPlaceholder src="/Medalla.glb" label="Medalla" size="sm" />
+        </div>
+        <div className="animate-entrada-modelo-delay">
+          <Model3DPlaceholder src="/Corona.glb" label="Corona" size="sm" />
+        </div>
       </div>
 
       <section className="mt-6 rounded-2xl border border-border bg-card p-4 text-left text-sm">

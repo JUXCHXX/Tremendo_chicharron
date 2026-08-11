@@ -29,7 +29,12 @@ export const Route = createFileRoute("/superadmin")({
 
     const ok = await estaAutenticado("dueno");
     if (!ok) {
-      throw redirect({ to: "/superadmin/login" });
+      throw redirect({
+        to: "/superadmin/login",
+        search: {
+          error: "Sesión no válida o no tienes permisos de superadministrador.",
+        },
+      });
     }
   },
   head: () => ({
