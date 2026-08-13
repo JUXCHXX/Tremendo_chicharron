@@ -165,12 +165,16 @@ function Menu() {
               >
                 <button
                   onClick={() => toggleCategoria(c.id)}
-                  className="relative block w-full overflow-hidden"
+                  className="block w-full overflow-hidden bg-card"
                   aria-expanded={abierta}
                   aria-label={c.nombre}
                 >
                   {portada && (
-                    <img src={portada} alt={c.nombre} className="h-40 w-full object-cover" />
+                    <img
+                      src={portada}
+                      alt={c.nombre}
+                      className="block h-auto w-full object-contain"
+                    />
                   )}
                 </button>
 
