@@ -1,4 +1,11 @@
-import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+  useLocation,
+  Outlet,
+} from "@tanstack/react-router";
 import { useState } from "react";
 import { Printer, RefreshCcw } from "lucide-react";
 import { estaAutenticado, cerrarSesion } from "@/lib/auth-staff";
@@ -11,16 +18,12 @@ import { imprimirComanda } from "@/lib/documentos";
 export const Route = createFileRoute("/admin")({
   beforeLoad: async ({ location }) => {
     // La ruta de login NO se protege — siempre debe mostrar el formulario
-    if (location.pathname.endsWith("/login")) return;
+    const href = location?.href ?? location?.pathname ?? "";
+    if (href.split("?")[0]!.split("#")[0]!.endsWith("/login")) return;
 
     const ok = await estaAutenticado("caja");
     if (!ok) {
-      throw redirect({
-        to: "/admin/login",
-        search: {
-          error: "Sesión no válida o no tienes permisos de administrador.",
-        },
-      });
+      throw redirect({ to: "/admin/login" });
     }
   },
   head: () => ({
@@ -51,6 +54,12 @@ function Admin() {
   const navigate = useNavigate();
   const { pedidos } = usePedidosRealtime();
   const [filtro, setFiltro] = useState<"todos" | string>("todos");
+
+  // Si estamos en /admin/login, renderizar la ruta hija (el formulario de login)
+  const { pathname } = useLocation();
+  if (pathname.endsWith("/login")) {
+    return <Outlet />;
+  }
 
   const lista = pedidos.filter((p) => filtro === "todos" || p.estado === filtro);
 

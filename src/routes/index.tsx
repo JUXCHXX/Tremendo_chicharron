@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { UtensilsCrossed, Truck, MapPin } from "lucide-react";
+import { UtensilsCrossed, Truck, MapPin, BadgePercent } from "lucide-react";
 import { dentroDeHorario, HORARIOS } from "@/lib/menu-data";
+import { useMenuData, promocionVigente } from "@/lib/use-menu-data";
 import { useStore } from "@/lib/store";
 
 export const Route = createFileRoute("/")({
@@ -31,6 +32,8 @@ const BOTONES = [
 
 function Home() {
   const abierto = useStore((s) => s.config.negocio_abierto) && dentroDeHorario();
+  const { promociones } = useMenuData();
+  const promoVigente = promociones.find((p) => promocionVigente(p));
 
   return (
     <main className="relative min-h-screen overflow-hidden">
@@ -63,7 +66,29 @@ function Home() {
           {abierto ? "Abierto ahora" : "Cerrado por el momento"}
         </span>
 
-        <nav className="mt-9 w-full space-y-3">
+        {promoVigente && (
+          <Link
+            to="/menu"
+            className="mt-6 block w-full overflow-hidden rounded-2xl border border-accent/60 bg-gradient-to-br from-card to-card/60 shadow-glow transition-transform hover:scale-[1.02]"
+          >
+            {promoVigente.imagen_url && (
+              <img src={promoVigente.imagen_url} alt="" className="h-32 w-full object-cover" />
+            )}
+            <div className="p-4">
+              <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.2em] text-accent uppercase">
+                <BadgePercent className="size-4" /> Promoción vigente
+              </p>
+              <p className="mt-1 font-display text-2xl leading-tight text-primary">
+                {promoVigente.titulo}
+              </p>
+              {promoVigente.descripcion && (
+                <p className="mt-1 text-sm text-muted-foreground">{promoVigente.descripcion}</p>
+              )}
+            </div>
+          </Link>
+        )}
+
+        <nav className="mt-7 w-full space-y-3">
           {BOTONES.map(({ to, label, icon: Icon }) => (
             <Link
               key={label}

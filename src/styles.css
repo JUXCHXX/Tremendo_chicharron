@@ -234,3 +234,19 @@
 @utility animate-entrada-modelo-delay {
   animation: entrada-modelo 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
 }
+
+/* Despliegue suave de los bloques de productos dentro de las categorías */
+@keyframes despliegue-menu {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@utility animate-despliegue {
+  animation: despliegue-menu 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}

@@ -1,4 +1,11 @@
-import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+  useLocation,
+  Outlet,
+} from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   Power,
@@ -15,6 +22,7 @@ import { formatCOP } from "@/lib/menu-data";
 import { supabase } from "@/lib/supabase";
 import {
   useMenuData,
+  promocionVigente,
   type ProductoDb,
   type CategoriaDb,
   type PromocionDb,
@@ -22,19 +30,26 @@ import {
 import { marcarRespaldo, useStore } from "@/lib/store";
 import { descargarExcel, descargarPdfReporte } from "@/lib/documentos";
 
+/** Convierte "Tremendo Bowl Montañero" → "tremendo-bowl-montanero" (placeholder de imagen). */
+function slugifyNombre(nombre: string): string {
+  return nombre
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
 export const Route = createFileRoute("/superadmin")({
   beforeLoad: async ({ location }) => {
     // La ruta de login NO se protege — siempre debe mostrar el formulario
-    if (location.pathname.endsWith("/login")) return;
+    // `href` incluye pathname + search + hash, por eso quitamos query/hash antes de comparar
+    const href = location?.href ?? location?.pathname ?? "";
+    if (href.split("?")[0]!.split("#")[0]!.endsWith("/login")) return;
 
     const ok = await estaAutenticado("dueno");
     if (!ok) {
-      throw redirect({
-        to: "/superadmin/login",
-        search: {
-          error: "Sesión no válida o no tienes permisos de superadministrador.",
-        },
-      });
+      throw redirect({ to: "/superadmin/login" });
     }
   },
   head: () => ({
@@ -65,6 +80,12 @@ function SuperAdmin() {
   const [creandoPromo, setCreandoPromo] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [mensaje, setMensaje] = useState("");
+
+  // Si estamos en /superadmin/login, renderizar la ruta hija (el formulario de login)
+  const { pathname } = useLocation();
+  if (pathname.endsWith("/login")) {
+    return <Outlet />;
+  }
 
   const diasSinRespaldo = config.ultimo_respaldo
     ? Math.floor((Date.now() - new Date(config.ultimo_respaldo).getTime()) / 86400000)
@@ -111,12 +132,13 @@ function SuperAdmin() {
         if (error) throw error;
         setMensaje("Producto actualizado correctamente.");
       } else {
+        // Tarea 15: si no se sube imagen, se usa el slug del nombre como placeholder (.png en /public)
         const { error } = await supabase.from("productos").insert({
           nombre: producto.nombre,
           descripcion: producto.descripcion,
           precio: producto.precio,
           categoria_id: producto.categoria_id,
-          imagen_url: imagenUrl,
+          imagen_url: imagenUrl ?? `/${slugifyNombre(producto.nombre ?? "")}.png`,
           disponible: true,
           orden: 99,
         });
@@ -152,6 +174,10 @@ function SuperAdmin() {
             descripcion: promo.descripcion,
             imagen_url: imagenUrl,
             activa: promo.activa,
+            tipo_vigencia: promo.tipo_vigencia ?? "fija",
+            fecha_inicio: promo.fecha_inicio ?? null,
+            fecha_fin: promo.fecha_fin ?? null,
+            dia_semana: promo.dia_semana ?? null,
           })
           .eq("id", promo.id);
         if (error) throw error;
@@ -162,7 +188,10 @@ function SuperAdmin() {
           descripcion: promo.descripcion,
           imagen_url: imagenUrl,
           activa: true,
-          tipo_vigencia: "fija",
+          tipo_vigencia: promo.tipo_vigencia ?? "fija",
+          fecha_inicio: promo.fecha_inicio ?? null,
+          fecha_fin: promo.fecha_fin ?? null,
+          dia_semana: promo.dia_semana ?? null,
         });
         if (error) throw error;
         setMensaje("Promoción creada correctamente.");
@@ -360,8 +389,13 @@ function SuperAdmin() {
                 <p className="mt-3 font-display text-2xl text-primary">{p.titulo}</p>
                 <p className="text-sm text-muted-foreground">{p.descripcion}</p>
                 <p className="mt-2 text-xs tracking-widest uppercase">
-                  Vigencia: {p.tipo_vigencia} · {p.activa ? "Activa" : "Inactiva"}
+                  {p.tipo_vigencia} · {p.activa ? "Activa" : "Inactiva"}
                 </p>
+                {promocionVigente(p) && (
+                  <p className="mt-1 inline-block rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-foreground">
+                    Vigente ahora
+                  </p>
+                )}
                 <div className="mt-3 flex gap-2">
                   <button
                     onClick={() => setEditandoPromo(p)}
@@ -624,6 +658,12 @@ function PromoForm({
 }) {
   const [titulo, setTitulo] = useState(promo?.titulo ?? "");
   const [descripcion, setDescripcion] = useState(promo?.descripcion ?? "");
+  const [tipoVigencia, setTipoVigencia] = useState<"fija" | "rotativa" | "por_fecha">(
+    promo?.tipo_vigencia ?? "fija",
+  );
+  const [fechaInicio, setFechaInicio] = useState(promo?.fecha_inicio ?? "");
+  const [fechaFin, setFechaFin] = useState(promo?.fecha_fin ?? "");
+  const [diaSemana, setDiaSemana] = useState(promo?.dia_semana?.toString() ?? "");
   const [imagenFile, setImagenFile] = useState<File | null>(null);
   const [imagenPreview, setImagenPreview] = useState(promo?.imagen_url ?? "");
 
@@ -661,6 +701,71 @@ function PromoForm({
               className="mt-1 w-full rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </label>
+
+          <label className="block">
+            <span className="text-xs tracking-widest text-muted-foreground uppercase">
+              Tipo de vigencia
+            </span>
+            <select
+              value={tipoVigencia}
+              onChange={(e) => setTipoVigencia(e.target.value as typeof tipoVigencia)}
+              className="mt-1 w-full rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="fija">Fija (siempre activa)</option>
+              <option value="rotativa">Rotativa (por día de la semana)</option>
+              <option value="por_fecha">Por rango de fechas</option>
+            </select>
+          </label>
+
+          {tipoVigencia === "rotativa" && (
+            <label className="block">
+              <span className="text-xs tracking-widest text-muted-foreground uppercase">
+                Día de la semana
+              </span>
+              <select
+                value={diaSemana}
+                onChange={(e) => setDiaSemana(e.target.value)}
+                className="mt-1 w-full rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Selecciona un día</option>
+                <option value="0">Domingo</option>
+                <option value="1">Lunes</option>
+                <option value="2">Martes</option>
+                <option value="3">Miércoles</option>
+                <option value="4">Jueves</option>
+                <option value="5">Viernes</option>
+                <option value="6">Sábado</option>
+              </select>
+            </label>
+          )}
+
+          {tipoVigencia === "por_fecha" && (
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-xs tracking-widest text-muted-foreground uppercase">
+                  Desde
+                </span>
+                <input
+                  type="date"
+                  value={fechaInicio}
+                  onChange={(e) => setFechaInicio(e.target.value)}
+                  className="mt-1 w-full rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs tracking-widest text-muted-foreground uppercase">
+                  Hasta
+                </span>
+                <input
+                  type="date"
+                  value={fechaFin}
+                  onChange={(e) => setFechaFin(e.target.value)}
+                  className="mt-1 w-full rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                />
+              </label>
+            </div>
+          )}
+
           <label className="block">
             <span className="text-xs tracking-widest text-muted-foreground uppercase">Imagen</span>
             <div className="mt-1 flex items-center gap-3">
@@ -675,7 +780,20 @@ function PromoForm({
             </div>
           </label>
           <button
-            onClick={() => onGuardar({ ...promo, titulo, descripcion }, imagenFile)}
+            onClick={() =>
+              onGuardar(
+                {
+                  ...promo,
+                  titulo,
+                  descripcion,
+                  tipo_vigencia: tipoVigencia,
+                  fecha_inicio: fechaInicio || null,
+                  fecha_fin: fechaFin || null,
+                  dia_semana: diaSemana ? Number(diaSemana) : null,
+                },
+                imagenFile,
+              )
+            }
             disabled={cargando || !titulo.trim()}
             className="w-full rounded-2xl bg-brasa py-3 font-display text-xl text-primary-foreground shadow-glow disabled:opacity-50"
           >

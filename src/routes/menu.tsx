@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, ShoppingBag, Plus, Minus, X } from "lucide-react";
 import { VARIANTES_PICADA, dentroDeHorario, formatCOP } from "@/lib/menu-data";
 import { addToCart, cartTotal, updateCantidad, useStore } from "@/lib/store";
@@ -29,9 +29,26 @@ export const Route = createFileRoute("/menu")({
   component: Menu,
 });
 
+const IMAGENES_CATEGORIA: Record<string, string> = {
+  "Tremendo Chicharrón": "/tremendochicharroncard.png",
+  "Tremendo Calentado": "/tremendocalentadocard.png",
+  "Para Picar / Tardear": "/parapicartardearcard.png",
+  Bebidas: "/bebidascard.png",
+};
+
+/** Convierte "Tremendo Chorizo" → "tremendo-chorizo" (placeholder de imagen en /public). */
+function slugifyNombre(nombre: string): string {
+  return nombre
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
 function Menu() {
   const { categorias, productos, cargando, error } = useMenuData();
-  const [cat, setCat] = useState<string>(categorias[0]?.id ?? "");
+  const [categoriaAbierta, setCategoriaAbierta] = useState<string | null>(null);
   const [seleccion, setSeleccion] = useState<ProductoDb | null>(null);
   const [carritoAbierto, setCarritoAbierto] = useState(false);
 
@@ -49,14 +66,13 @@ function Menu() {
   const negocioAbierto = useStore((s) => s.config.negocio_abierto);
   const abierto = negocioAbierto && dentroDeHorario();
 
-  const categoria = categorias.find((c) => c.id === cat) ?? categorias[0];
-  const productosFiltrados = useMemo(
-    () => productos.filter((p) => p.categoria_id === categoria?.id),
-    [productos, categoria],
-  );
   const total = cartTotal(cart);
   const unidades = cart.reduce((a, c) => a + c.cantidad, 0);
   const precioDe = (p: ProductoDb) => precios[p.id] ?? p.precio;
+
+  const toggleCategoria = (id: string) => {
+    setCategoriaAbierta((prev) => (prev === id ? null : id));
+  };
 
   if (cargando) {
     return (
@@ -66,7 +82,7 @@ function Menu() {
     );
   }
 
-  if (error || !categoria) {
+  if (error || categorias.length === 0) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
         <h1 className="font-display text-3xl text-primary">No se pudo cargar el menú</h1>
@@ -82,7 +98,7 @@ function Menu() {
   }
 
   return (
-    <main className="min-h-screen pb-28">
+    <main className="min-h-screen">
       <header className="sticky top-0 z-30 border-b border-primary/20 bg-background/95 shadow-card backdrop-blur-md">
         <div className="mx-auto flex max-w-4xl items-center gap-4 px-5 py-5">
           <Link
@@ -113,21 +129,18 @@ function Menu() {
               {SUBMARCAS[submarca]}
             </p>
           </div>
-        </div>
-        <div className="mx-auto flex max-w-4xl gap-2 overflow-x-auto px-5 pb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {categorias.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setCat(c.id)}
-              className={`relative shrink-0 rounded-full px-5 py-3 text-sm font-semibold transition-all duration-300 ease-out ${
-                c.id === categoria.id
-                  ? "bg-brasa text-primary-foreground shadow-glow scale-105"
-                  : "border border-border bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground hover:scale-105"
-              }`}
-            >
-              {c.nombre}
-            </button>
-          ))}
+          <button
+            onClick={() => setCarritoAbierto(true)}
+            className="relative flex size-11 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-card/80 text-primary transition-colors hover:border-primary hover:bg-card"
+            aria-label="Ver carrito"
+          >
+            <ShoppingBag className="size-5" />
+            {unidades > 0 && (
+              <span className="absolute -top-1 -right-1 flex size-5 items-center justify-center rounded-full bg-accent text-[11px] font-bold text-accent-foreground">
+                {unidades}
+              </span>
+            )}
+          </button>
         </div>
       </header>
 
@@ -139,148 +152,154 @@ function Menu() {
           </div>
         )}
 
-        {categoria.modelo_3d_url && (
-          <section className="mb-6">
-            <p className="mb-2 text-xs tracking-[0.2em] text-muted-foreground uppercase">
-              Plato destacado de {categoria.nombre}
-            </p>
-            <Model3DPlaceholder
-              src={categoria.modelo_3d_url}
-              label={productos.find((p) => p.id === categoria.plato_destacado_id)?.nombre ?? ""}
-            />
-          </section>
-        )}
-
-        <section className="grid gap-4 sm:grid-cols-2">
-          {productosFiltrados.map((p) => {
-            const agotado = agotados.includes(p.id) || !p.disponible;
-            const precio = precioDe(p);
+        <div className="space-y-4">
+          {categorias.map((c) => {
+            const abierta = categoriaAbierta === c.id;
+            const productosCat = productos.filter((p) => p.categoria_id === c.id);
+            const destacado = productos.find((p) => p.id === c.plato_destacado_id);
+            const portada = IMAGENES_CATEGORIA[c.nombre] ?? "";
             return (
               <article
-                key={p.id}
-                className="relative overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-card transition-colors hover:border-primary/40"
+                key={c.id}
+                className="overflow-hidden rounded-2xl border border-border bg-card shadow-card"
               >
-                {agotado && (
-                  <img
-                    src="/soldout.png"
-                    alt="Agotado"
-                    className="pointer-events-none absolute inset-0 size-full object-cover opacity-80"
-                  />
+                <button
+                  onClick={() => toggleCategoria(c.id)}
+                  className="relative block w-full overflow-hidden"
+                  aria-expanded={abierta}
+                  aria-label={c.nombre}
+                >
+                  {portada && (
+                    <img src={portada} alt={c.nombre} className="h-40 w-full object-cover" />
+                  )}
+                </button>
+
+                {abierta && (
+                  <div className="animate-despliegue border-t border-border">
+                    {c.modelo_3d_url && (
+                      <section className="p-4 pb-0">
+                        <p className="mb-2 text-xs tracking-[0.2em] text-muted-foreground uppercase">
+                          Plato destacado de {c.nombre}
+                        </p>
+                        <Model3DPlaceholder src={c.modelo_3d_url} label={destacado?.nombre ?? ""} />
+                      </section>
+                    )}
+
+                    <div className="divide-y divide-border/20">
+                      {productosCat.map((p) => {
+                        const agotado = agotados.includes(p.id) || !p.disponible;
+                        const precio = precioDe(p);
+                        const textoPrecio = p.por_persona
+                          ? "Desde " + formatCOP(VARIANTES_PICADA[0]!.precio)
+                          : precio
+                            ? formatCOP(precio)
+                            : "Precio por definir";
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => setSeleccion(p)}
+                            className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/30"
+                          >
+                            <img
+                              src={p.imagen_url ?? `/${slugifyNombre(p.nombre)}.png`}
+                              alt=""
+                              className="size-20 shrink-0 rounded-xl object-cover"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate font-semibold text-foreground">
+                                {p.nombre}
+                              </span>
+                              <span className="line-clamp-2 block text-xs text-muted-foreground">
+                                {p.descripcion}
+                              </span>
+                              <span className="mt-0.5 block font-display text-lg text-primary">
+                                {textoPrecio}
+                              </span>
+                            </span>
+                            {agotado ? (
+                              <img
+                                src="/soldout.png"
+                                alt="Agotado"
+                                className="size-12 shrink-0 object-contain"
+                              />
+                            ) : (
+                              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brasa text-primary-foreground">
+                                <Plus className="size-4" />
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
-                {p.imagen_url && (
-                  <img
-                    src={p.imagen_url}
-                    alt=""
-                    className="mb-3 h-32 w-full rounded-xl object-cover"
-                  />
-                )}
-                <h2 className="font-display text-2xl leading-tight text-foreground">{p.nombre}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">{p.descripcion}</p>
-                {p.combo_gratis && (
-                  <p className="mt-2 text-xs font-semibold text-accent">
-                    Puedes agregar combo (papas en casco + gaseosa) sin costo
-                  </p>
-                )}
-                <div className="mt-4 flex items-center justify-between">
-                  <span className="font-display text-2xl text-primary">
-                    {p.por_persona
-                      ? "Desde " + formatCOP(VARIANTES_PICADA[0]!.precio)
-                      : precio
-                        ? formatCOP(precio)
-                        : "Precio por definir"}
-                  </span>
-                  <button
-                    disabled={agotado || !abierto || (!p.por_persona && !precio)}
-                    onClick={() => setSeleccion(p)}
-                    className="relative z-10 rounded-full bg-brasa px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-40"
-                  >
-                    Agregar
-                  </button>
-                </div>
               </article>
             );
           })}
-        </section>
+        </div>
       </div>
 
       <FooterMenu />
       <DonVelto />
 
-      {unidades > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-primary/30 bg-card/95 px-4 py-3 backdrop-blur">
-          <div className="mx-auto flex max-w-4xl items-center gap-3">
-            <button
-              onClick={() => setCarritoAbierto(true)}
-              className="flex flex-1 items-center gap-3 text-left"
-            >
-              <span className="relative">
-                <ShoppingBag className="size-7 text-primary" />
-                <span className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-accent text-[11px] font-bold text-accent-foreground">
-                  {unidades}
-                </span>
-              </span>
-              <span>
-                <span className="block text-xs text-muted-foreground">Ver carrito</span>
-                <span className="font-display text-xl text-primary">{formatCOP(total)}</span>
-              </span>
-            </button>
-            <Link
-              to="/pedido"
-              className="rounded-full bg-brasa px-6 py-3 font-display text-xl text-primary-foreground shadow-glow"
-            >
-              Continuar
-            </Link>
-          </div>
-        </div>
-      )}
-
       {carritoAbierto && (
         <Modal onClose={() => setCarritoAbierto(false)} titulo="Tu pedido">
-          <div className="space-y-3">
-            {cart.map((i) => (
-              <div key={i.key} className="flex items-start gap-3 border-b border-border pb-3">
-                <div className="flex-1">
-                  <p className="font-semibold">
-                    {i.nombre}
-                    {i.variante_personas ? ` · ${i.variante_personas} pers.` : ""}
-                  </p>
-                  {i.combo && <p className="text-xs text-accent">Con combo incluido</p>}
-                  {i.notas && <p className="text-xs text-muted-foreground">Nota: {i.notas}</p>}
-                  <p className="text-sm text-primary">
-                    {formatCOP(i.precio_unitario * i.cantidad)}
-                  </p>
+          {cart.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <ShoppingBag className="size-10 text-muted-foreground" strokeWidth={1.5} />
+              <p className="text-sm text-muted-foreground">
+                Tu carrito está vacío. Agrega algo del menú y vuelve aquí.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {cart.map((i) => (
+                <div key={i.key} className="flex items-start gap-3 border-b border-border pb-3">
+                  <div className="flex-1">
+                    <p className="font-semibold">
+                      {i.nombre}
+                      {i.variante_personas ? ` · ${i.variante_personas} pers.` : ""}
+                    </p>
+                    {i.combo && <p className="text-xs text-accent">Con combo incluido</p>}
+                    {i.notas && <p className="text-xs text-muted-foreground">Nota: {i.notas}</p>}
+                    <p className="text-sm text-primary">
+                      {formatCOP(i.precio_unitario * i.cantidad)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => updateCantidad(i.key, i.cantidad - 1)}
+                      className="rounded-full border border-border p-2"
+                      aria-label="Quitar uno"
+                    >
+                      <Minus className="size-4" />
+                    </button>
+                    <span className="w-5 text-center">{i.cantidad}</span>
+                    <button
+                      onClick={() => updateCantidad(i.key, i.cantidad + 1)}
+                      className="rounded-full border border-border p-2"
+                      aria-label="Agregar uno"
+                    >
+                      <Plus className="size-4" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => updateCantidad(i.key, i.cantidad - 1)}
-                    className="rounded-full border border-border p-2"
-                    aria-label="Quitar uno"
-                  >
-                    <Minus className="size-4" />
-                  </button>
-                  <span className="w-5 text-center">{i.cantidad}</span>
-                  <button
-                    onClick={() => updateCantidad(i.key, i.cantidad + 1)}
-                    className="rounded-full border border-border p-2"
-                    aria-label="Agregar uno"
-                  >
-                    <Plus className="size-4" />
-                  </button>
+              ))}
+              <div className="rounded-2xl border border-primary/25 bg-card p-4">
+                <div className="flex justify-between font-display text-2xl">
+                  <span>Total</span>
+                  <span className="text-primary">{formatCOP(total)}</span>
                 </div>
               </div>
-            ))}
-            <div className="flex justify-between pt-2 font-display text-2xl">
-              <span>Total</span>
-              <span className="text-primary">{formatCOP(total)}</span>
+              <Link
+                to="/pedido"
+                onClick={() => setCarritoAbierto(false)}
+                className="block rounded-2xl bg-brasa py-3 text-center font-display text-xl text-primary-foreground shadow-glow"
+              >
+                Ir al checkout
+              </Link>
             </div>
-            <Link
-              to="/pedido"
-              onClick={() => setCarritoAbierto(false)}
-              className="block rounded-2xl bg-brasa py-3 text-center font-display text-xl text-primary-foreground"
-            >
-              Ir al checkout
-            </Link>
-          </div>
+          )}
         </Modal>
       )}
 
@@ -339,6 +358,13 @@ function AgregarProducto({
 
   return (
     <Modal titulo={producto.nombre} onClose={onClose}>
+      {producto.imagen_url && (
+        <img
+          src={producto.imagen_url}
+          alt=""
+          className="mb-3 h-40 w-full rounded-2xl object-cover"
+        />
+      )}
       <p className="text-sm text-muted-foreground">{producto.descripcion}</p>
 
       {producto.por_persona && (

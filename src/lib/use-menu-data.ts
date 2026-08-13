@@ -29,7 +29,10 @@ export interface PromocionDb {
   titulo: string;
   descripcion: string;
   imagen_url: string | null;
-  tipo_vigencia: string;
+  tipo_vigencia: "fija" | "rotativa" | "por_fecha";
+  fecha_inicio: string | null;
+  fecha_fin: string | null;
+  dia_semana: number | null;
   activa: boolean;
 }
 
@@ -73,4 +76,37 @@ export function useMenuData() {
   }, []);
 
   return { categorias, productos, promociones, cargando, error, recargar: cargar };
+}
+
+/**
+ * Determina si una promoción está vigente AHORA, en hora de Colombia.
+ * - fija: siempre que esté activa.
+ * - rotativa: si el dia_semana coincide con el día actual (0 = domingo).
+ * - por_fecha: si la fecha de hoy está entre fecha_inicio y fecha_fin.
+ */
+export function promocionVigente(p: PromocionDb, ahora = new Date()): boolean {
+  if (!p.activa) return false;
+
+  const partes = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Bogota",
+    weekday: "short",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(ahora);
+  const get = (t: string) => partes.find((x) => x.type === t)?.value ?? "";
+
+  if (p.tipo_vigencia === "rotativa") {
+    const dias = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const diaHoy = dias.indexOf(get("weekday")); // 0 = domingo
+    return p.dia_semana === diaHoy;
+  }
+
+  if (p.tipo_vigencia === "por_fecha") {
+    if (!p.fecha_inicio || !p.fecha_fin) return false;
+    const hoy = `${get("year")}-${get("month")}-${get("day")}`;
+    return hoy >= p.fecha_inicio && hoy <= p.fecha_fin;
+  }
+
+  return true; // fija
 }
