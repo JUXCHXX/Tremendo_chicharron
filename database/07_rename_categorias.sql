@@ -6,11 +6,11 @@
 --
 --   - "Desayunos"      → "Tremendo Calentado"
 --       plato destacado: Tremendo Calentado Paisa
---       modelo 3D:      /desayunos-tremendo-calentado-paisa.glb
+--       modelo 3D:      /rice_and_beans.glb
 --
 --   - "Almuerzos"      → "Tremendo Chicharrón"
 --       plato destacado: Tremendo Bowl Montañero (sencillo)
---       modelo 3D:      /almuerzos-bowl-montanero.glb
+--       modelo 3D:      /food_bowl.glb
 --
 --   - "Para Picar / Tardear" NO se toca (ya está bien configurada).
 --
@@ -30,7 +30,7 @@ update public.categorias
 -- Categoría "Tremendo Calentado" (antes Desayunos) → Tremendo Calentado Paisa
 update public.categorias c
    set plato_destacado_id = p.id,
-       modelo_3d_url      = '/desayunos-tremendo-calentado-paisa.glb'
+       modelo_3d_url      = '/rice_and_beans.glb'
   from public.productos p
  where c.nombre = 'Tremendo Calentado'
    and p.categoria_id = c.id
@@ -39,7 +39,7 @@ update public.categorias c
 -- Categoría "Tremendo Chicharrón" (antes Almuerzos) → Tremendo Bowl Montañero (sencillo)
 update public.categorias c
    set plato_destacado_id = p.id,
-       modelo_3d_url      = '/almuerzos-bowl-montanero.glb'
+       modelo_3d_url      = '/food_bowl.glb'
   from public.productos p
  where c.nombre = 'Tremendo Chicharrón'
    and p.categoria_id = c.id

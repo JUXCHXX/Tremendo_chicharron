@@ -7,6 +7,13 @@ interface Msg {
   content: string;
 }
 
+const MENSAJES_PROACTIVOS = [
+  "¿No sabes qué pedir? Ven, yo te ayudo 🐺",
+  "¿Con cuánto cuenta? Le armo algo tremendo 😋",
+  "¿Antojo de chicharrón? Aquí estoy para eso 🐷",
+  "¿Picada para cuántos? Yo le digo cuál le rinde más 💪",
+];
+
 export function DonVelto() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -18,11 +25,44 @@ export function DonVelto() {
         "¡Quiubo pues! Soy Don Velto 🐷 ¿Le antojo algo tremendo? Dígame para cuántos y con cuánto cuenta.",
     },
   ]);
+  const [globo, setGlobo] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs, open]);
+
+  // Mensajes proactivos: aparece un globo ocasional junto al botón del chat
+  useEffect(() => {
+    if (open) {
+      setGlobo(null);
+      return;
+    }
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let hideTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    const programarGlobo = () => {
+      // Aparece cada 25–50 segundos, solo si el chat está cerrado
+      timeout = setTimeout(
+        () => {
+          if (!open) {
+            const idx = Math.floor(Math.random() * MENSAJES_PROACTIVOS.length);
+            const msg = MENSAJES_PROACTIVOS[idx] ?? "¿Le ayudo con su pedido? 😋";
+            setGlobo(msg);
+            hideTimeout = setTimeout(() => setGlobo(null), 6000);
+          }
+          programarGlobo();
+        },
+        25000 + Math.random() * 25000,
+      );
+    };
+
+    programarGlobo();
+    return () => {
+      if (timeout) clearTimeout(timeout);
+      if (hideTimeout) clearTimeout(hideTimeout);
+    };
+  }, [open]);
 
   async function enviar() {
     const texto = input.trim();
@@ -51,12 +91,29 @@ export function DonVelto() {
       });
 
       if (error) {
-        if (error.context?.status === 429) {
+        const status = error.context?.status;
+        const serverMsg = (data as { error?: string } | null)?.error;
+        // 💥 Log real para diagnóstico — el usuario debe revisar la consola
+        console.error("[DonVelto] Error invocando chat-don-velto:", {
+          status,
+          contexto: error.context,
+          data,
+          mensajeError: serverMsg,
+        });
+        if (status === 429) {
           setMsgs([
             ...nuevos,
             {
               role: "assistant",
-              content: "Estoy atendiendo muchas mesas, intente en un momentico.",
+              content: "Estoy atendiendo muchas personas, inténtico en un momentico.",
+            },
+          ]);
+        } else if (serverMsg) {
+          setMsgs([
+            ...nuevos,
+            {
+              role: "assistant",
+              content: `Ups, tuve un problema: ${serverMsg}`,
             },
           ]);
         } else {
@@ -73,7 +130,9 @@ export function DonVelto() {
 
       const content = data?.choices?.[0]?.message?.content ?? "...";
       setMsgs([...nuevos, { role: "assistant", content }]);
-    } catch {
+    } catch (e) {
+      // 💥 Log del error real en consola para diagnosticar
+      console.error("[DonVelto] Error inesperado en el chat:", e);
       setMsgs([
         ...nuevos,
         {
@@ -88,6 +147,20 @@ export function DonVelto() {
 
   return (
     <>
+      {/* Globo proactivo */}
+      {globo && !open && (
+        <div className="fixed right-4 bottom-40 z-50 max-w-[16rem] rounded-2xl rounded-br-sm border border-primary/30 bg-popover px-4 py-3 text-sm text-foreground shadow-glow md:bottom-24">
+          <p>{globo}</p>
+          <button
+            onClick={() => setGlobo(null)}
+            aria-label="Cerrar mensaje"
+            className="absolute -top-2 -right-2 flex size-5 items-center justify-center rounded-full bg-brasa text-primary-foreground"
+          >
+            <X className="size-3" />
+          </button>
+        </div>
+      )}
+
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label="Abrir chat con Don Velto"

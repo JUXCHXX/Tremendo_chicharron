@@ -70,16 +70,6 @@ function Admin() {
     if (error) console.error("Error actualizando estado:", error);
   };
 
-  // Confirmar domicilio y pasar a pendiente_pago
-  const confirmarDomicilioDb = async (id: string, valor: number, pd: PedidoDb) => {
-    if (!supabase) return;
-    const { error } = await supabase
-      .from("pedidos")
-      .update({ valor_domicilio: valor, total: pd.subtotal + valor, estado: "pendiente_pago" })
-      .eq("id", id);
-    if (error) console.error("Error confirmando domicilio:", error);
-  };
-
   // Actualizar domicilio
   const setDomicilioDb = async (id: string, valor: number, pd: PedidoDb) => {
     if (!supabase) return;
@@ -153,6 +143,7 @@ function Admin() {
                 <b>{pd.cliente_nombre}</b> · {pd.cliente_telefono}
               </p>
               <p className="text-muted-foreground">{pd.direccion_entrega}</p>
+              {pd.barrio && <p className="text-xs text-primary">Barrio: {pd.barrio}</p>}
               {pd.latitud !== null && pd.longitud !== null && (
                 <p className="text-xs text-muted-foreground">
                   📍 {pd.latitud.toFixed(5)}, {pd.longitud.toFixed(5)}
@@ -175,26 +166,6 @@ function Admin() {
                 {formatCOP(pd.total)}
               </span>
             </div>
-
-            {pd.estado === "pendiente_confirmacion_cajera" && (
-              <div className="mt-3 rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm">
-                <p className="text-xs text-muted-foreground">
-                  Confirma el valor del domicilio para pasar el pedido a pendiente de pago y
-                  habilitar el botón "Ir a Pagar" del cliente.
-                </p>
-                <button
-                  onClick={() => {
-                    const valorInput = document.querySelector<HTMLInputElement>(
-                      `input[data-domicilio="${pd.id}"]`,
-                    );
-                    confirmarDomicilioDb(pd.id, Number(valorInput?.value) || 0, pd);
-                  }}
-                  className="mt-2 rounded-xl bg-brasa px-4 py-2 text-sm font-semibold text-primary-foreground"
-                >
-                  Confirmar domicilio y pasar a pago
-                </button>
-              </div>
-            )}
 
             <p className="mt-1 text-xs text-muted-foreground">
               Pago: {pd.medio_pago}

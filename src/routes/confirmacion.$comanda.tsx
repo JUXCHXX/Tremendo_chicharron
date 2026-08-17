@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { CheckCircle2, Clock, MessageCircle } from "lucide-react";
+import { CheckCircle2, MessageCircle } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { useStore } from "@/lib/store";
 import { Model3DPlaceholder } from "@/components/Model3DPlaceholder";
-import { linkConfirmacionDomicilio } from "@/lib/documentos";
+import { linkPago } from "@/lib/documentos";
 
 export const Route = createFileRoute("/confirmacion/$comanda")({
   head: () => ({
@@ -132,7 +132,11 @@ function Confirmacion() {
             <span className="text-primary">{formatCOP(i.precio_unitario * i.cantidad)}</span>
           </div>
         ))}
-        <div className="mt-2 flex justify-between border-t border-border pt-2 font-display text-2xl">
+        <div className="mt-2 flex justify-between border-t border-border pt-2 text-sm">
+          <span>Domicilio</span>
+          <span className="text-primary">{formatCOP(pedido.valor_domicilio)}</span>
+        </div>
+        <div className="flex justify-between font-display text-2xl">
           <span>Total</span>
           <span className="text-primary">{formatCOP(pedido.total)}</span>
         </div>
@@ -144,22 +148,14 @@ function Confirmacion() {
         )}
       </section>
 
-      <div className="mt-6 flex items-start gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 text-left text-sm">
-        <Clock className="size-5 shrink-0 text-primary" />
-        <p>
-          La caja está confirmando el valor del domicilio. En unos minutos podrás pagar desde la
-          pantalla de seguimiento de tu pedido.
-        </p>
-      </div>
-
-      {pedido.estado === "pendiente_confirmacion_cajera" && (
+      {pedido.estado === "pendiente_pago" && (
         <a
-          href={linkConfirmacionDomicilio(pedido)}
+          href={linkPago(pedido)}
           target="_blank"
           rel="noreferrer"
-          className="mt-4 flex items-center justify-center gap-3 rounded-2xl bg-brasa py-4 font-display text-2xl text-primary-foreground shadow-glow"
+          className="mt-6 flex items-center justify-center gap-3 rounded-2xl bg-brasa py-4 font-display text-2xl text-primary-foreground shadow-glow"
         >
-          <MessageCircle className="size-6" /> Enviar para confirmación de domicilio
+          <MessageCircle className="size-6" /> Ir a Pagar · {formatCOP(pedido.total)}
         </a>
       )}
 

@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { ArrowLeft, Search, MessageCircle, Clock } from "lucide-react";
+import { ArrowLeft, Search, MessageCircle } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { supabase } from "@/lib/supabase";
-import { linkConfirmacionDomicilio, linkPago } from "@/lib/documentos";
+import { linkPago } from "@/lib/documentos";
 import { ESTADOS_FLUJO, ESTADO_LABEL, type Pedido } from "@/lib/store";
 
 export const Route = createFileRoute("/pedido/$numero_comanda")({
@@ -117,6 +117,7 @@ function ConsultarPedido() {
         cliente_nombre: String(pedidoObj["cliente_nombre"]),
         cliente_telefono: String(pedidoObj["cliente_telefono"]),
         direccion_entrega: String(pedidoObj["direccion_entrega"]),
+        barrio: pedidoObj["barrio"] != null ? String(pedidoObj["barrio"]) : null,
         latitud: pedidoObj["latitud"] != null ? Number(pedidoObj["latitud"]) : null,
         longitud: pedidoObj["longitud"] != null ? Number(pedidoObj["longitud"]) : null,
         medio_pago: pedidoObj["medio_pago"] as Pedido["medio_pago"],
@@ -236,6 +237,12 @@ function DetallePedido({ pedido }: { pedido: Pedido }) {
             <span className="text-primary">{formatCOP(i.precio_unitario * i.cantidad)}</span>
           </div>
         ))}
+        {pedido.barrio && (
+          <div className="flex justify-between pt-1">
+            <span>Barrio</span>
+            <span>{pedido.barrio}</span>
+          </div>
+        )}
         <div className="mt-2 flex justify-between border-t border-border pt-2">
           <span>Domicilio</span>
           <span>{formatCOP(pedido.valor_domicilio)}</span>
@@ -255,26 +262,6 @@ function DetallePedido({ pedido }: { pedido: Pedido }) {
         >
           <MessageCircle className="size-6" /> Ir a Pagar
         </a>
-      )}
-
-      {pedido.estado === "pendiente_confirmacion_cajera" && (
-        <>
-          <div className="mt-6 flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 text-sm">
-            <Clock className="size-5 shrink-0 text-primary" />
-            <p>
-              La caja está confirmando el valor del domicilio. En unos minutos aparecerá el botón
-              para pagar.
-            </p>
-          </div>
-          <a
-            href={linkConfirmacionDomicilio(pedido)}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-4 flex items-center justify-center gap-3 rounded-2xl bg-brasa py-4 font-display text-2xl text-primary-foreground shadow-glow"
-          >
-            <MessageCircle className="size-6" /> Enviar para confirmación de domicilio
-          </a>
-        </>
       )}
     </>
   );

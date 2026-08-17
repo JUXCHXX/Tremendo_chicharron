@@ -98,6 +98,7 @@ export function mensajeWhatsApp(pd: Pedido): string {
     ``,
     `Nombre: ${pd.cliente_nombre}`,
     `Teléfono: ${pd.cliente_telefono}`,
+    `Barrio: ${pd.barrio ?? "—"}`,
     `Dirección: ${pd.direccion_entrega}`,
     `Medio de pago: ${pd.medio_pago}`,
   ];
@@ -125,6 +126,7 @@ export function generarMensajeConfirmacionDomicilio(pd: Pedido): string {
     ``,
     `Nombre: ${pd.cliente_nombre}`,
     `Teléfono: ${pd.cliente_telefono}`,
+    `Barrio: ${pd.barrio ?? "—"}`,
     `Dirección: ${pd.direccion_entrega}`,
   ].join("\n");
 }

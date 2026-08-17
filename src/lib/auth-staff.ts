@@ -38,10 +38,14 @@ export async function obtenerRolUsuario(userId: string): Promise<RolUsuario | nu
 
 export async function estaAutenticado(panel: PanelStaff): Promise<boolean> {
   if (!supabase) return false;
-  const { data } = await supabase.auth.getSession();
-  if (!data.session) return false;
+  // Usamos getUser() en lugar de getSession(): getUser() espera a que Supabase
+  // restaure la sesión desde localStorage (persistSession) antes de resolver.
+  // getSession() puede devolver null si se llama antes de que la sesión se
+  // haya inicializado, expulsando al usuario por error al refrescar.
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return false;
   const rol = panel === "caja" ? "admin" : "superadmin";
-  return tieneRol(data.session.user.id, rol);
+  return tieneRol(data.user.id, rol);
 }
 
 /**

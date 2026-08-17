@@ -202,7 +202,10 @@ function Menu() {
                           <button
                             key={p.id}
                             onClick={() => setSeleccion(p)}
-                            className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/30"
+                            disabled={agotado}
+                            className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+                              agotado ? "cursor-not-allowed opacity-60" : "hover:bg-muted/30"
+                            }`}
                           >
                             <img
                               src={p.imagen_url ?? `/${slugifyNombre(p.nombre)}.png`}

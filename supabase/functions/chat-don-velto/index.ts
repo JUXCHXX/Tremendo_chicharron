@@ -47,10 +47,7 @@ interface Producto {
   descripcion: string;
 }
 
-async function generarCartaTexto(
-  categorias: Categoria[],
-  productos: Producto[],
-): Promise<string> {
+async function generarCartaTexto(categorias: Categoria[], productos: Producto[]): Promise<string> {
   return categorias
     .map(
       (c) =>

@@ -18,7 +18,6 @@ export type EstadoPedido =
   | "cancelado";
 
 export const ESTADOS_FLUJO: EstadoPedido[] = [
-  "pendiente_confirmacion_cajera",
   "pendiente_pago",
   "pago_confirmado",
   "en_cocina",
@@ -55,6 +54,7 @@ export interface Pedido {
   cliente_nombre: string;
   cliente_telefono: string;
   direccion_entrega: string;
+  barrio: string | null;
   latitud: number | null;
   longitud: number | null;
   medio_pago: "efectivo" | "transferencia" | "tarjeta";
@@ -172,6 +172,12 @@ export const getState = () => state;
 
 // ── Carrito ──────────────────────────────────────────────────
 export function addToCart(item: Omit<CartItem, "key">) {
+  // Capa de seguridad: no permitir agregar productos agotados
+  const producto = PRODUCTOS.find((p) => p.id === item.producto_id);
+  if (producto && !producto.disponible) {
+    console.warn(`[addToCart] Bloqueado: "${item.nombre}" está agotado.`);
+    return;
+  }
   const key = `${item.producto_id}|${item.variante_personas ?? ""}|${item.notas}|${item.combo}`;
   setState((s) => {
     const existing = s.cart.find((c) => c.key === key);
@@ -208,6 +214,8 @@ export async function crearPedido(data: {
   cliente_nombre: string;
   cliente_telefono: string;
   direccion_entrega: string;
+  barrio?: string | null;
+  valor_domicilio?: number;
   latitud?: number | null;
   longitud?: number | null;
   medio_pago: Pedido["medio_pago"];
@@ -215,21 +223,24 @@ export async function crearPedido(data: {
   items: CartItem[];
 }): Promise<Pedido> {
   const subtotal = cartTotal(data.items);
+  const valorDomicilio = data.valor_domicilio ?? 0;
+  const total = subtotal + valorDomicilio;
   const creado = new Date();
   const pedido: Pedido = {
     id: crypto.randomUUID(),
     numero_comanda: nuevoNumeroComanda(),
     ...data,
+    barrio: data.barrio ?? null,
     latitud: data.latitud ?? null,
     longitud: data.longitud ?? null,
     vuelto:
       data.medio_pago === "efectivo" && data.monto_efectivo_recibido != null
-        ? data.monto_efectivo_recibido - subtotal
+        ? data.monto_efectivo_recibido - total
         : null,
-    valor_domicilio: 0,
+    valor_domicilio: valorDomicilio,
     subtotal,
-    total: subtotal,
-    estado: "pendiente_confirmacion_cajera",
+    total,
+    estado: "pendiente_pago",
     creado_en: creado.toISOString(),
     editable_hasta: new Date(creado.getTime() + 10 * 60000).toISOString(),
     version: 1,
@@ -246,6 +257,7 @@ export async function crearPedido(data: {
         cliente_nombre: pedido.cliente_nombre,
         cliente_telefono: pedido.cliente_telefono,
         direccion_entrega: pedido.direccion_entrega,
+        barrio: pedido.barrio,
         latitud: pedido.latitud,
         longitud: pedido.longitud,
         medio_pago: pedido.medio_pago,

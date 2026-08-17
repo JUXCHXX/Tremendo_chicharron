@@ -12,7 +12,7 @@ import {
 import { formatCOP } from "@/lib/menu-data";
 import { getClienteLocal, normalizarTelefono } from "@/lib/clientes";
 import { usePedidosRealtime, type PedidoDb } from "@/lib/use-pedidos";
-import { linkConfirmacionDomicilio, linkPago } from "@/lib/documentos";
+import { linkPago } from "@/lib/documentos";
 import { ESTADOS_FLUJO, ESTADO_LABEL } from "@/lib/store";
 
 export const Route = createFileRoute("/mi-chicharronera")({
@@ -81,6 +81,17 @@ function MiChicharronera() {
         </Link>
         <h1 className="font-display text-3xl text-primary">Mi Chicharronera</h1>
       </header>
+
+      {/* Banner de bienvenida */}
+      <div className="mb-5 rounded-2xl border border-primary/40 bg-primary/10 p-4 shadow-glow">
+        <p className="font-display text-xl text-primary">
+          ¡Quiubo! Bienvenido a tu Chicharronera 🐷
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Aquí puedes seguir tus pedidos en tiempo real, ver el estado de tu comanda y pagar cuando
+          esté pendiente. Si tienes dudas, escríbenos por WhatsApp.
+        </p>
+      </div>
 
       {pedidos.length === 0 ? (
         <div className="mt-10 text-center">
@@ -155,17 +166,6 @@ function PedidoCard({ pedido: p }: { pedido: PedidoDb }) {
         <span>Total</span>
         <span className="text-primary">{formatCOP(p.total)}</span>
       </div>
-
-      {p.estado === "pendiente_confirmacion_cajera" && (
-        <a
-          href={linkConfirmacionDomicilio(p as never)}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-3 flex items-center justify-center gap-2 rounded-2xl bg-brasa py-3 font-display text-xl text-primary-foreground shadow-glow"
-        >
-          <MessageCircle className="size-5" /> Enviar para confirmación de domicilio
-        </a>
-      )}
 
       {p.estado === "pendiente_pago" && (
         <a

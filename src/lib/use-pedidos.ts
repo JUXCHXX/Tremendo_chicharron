@@ -31,6 +31,7 @@ export interface PedidoDb {
   cliente_nombre: string;
   cliente_telefono: string;
   direccion_entrega: string;
+  barrio: string | null;
   latitud: number | null;
   longitud: number | null;
   medio_pago: string;

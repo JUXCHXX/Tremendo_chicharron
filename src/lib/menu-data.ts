@@ -45,14 +45,14 @@ export const CATEGORIAS: Categoria[] = [
     nombre: "Tremendo Calentado",
     orden: 1,
     plato_destacado_id: "des-calentado-paisa",
-    modelo_3d_url: "/desayunos-tremendo-calentado-paisa.glb",
+    modelo_3d_url: "/rice_and_beans.glb",
   },
   {
     id: "almuerzos",
     nombre: "Tremendo Chicharrón",
     orden: 2,
     plato_destacado_id: "alm-bowl-montanero",
-    modelo_3d_url: "/almuerzos-bowl-montanero.glb",
+    modelo_3d_url: "/food_bowl.glb",
   },
   {
     id: "picar",

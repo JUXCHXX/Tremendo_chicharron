@@ -1,10 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Check, ChevronDown, Loader2 } from "lucide-react";
 import { formatCOP, dentroDeHorario } from "@/lib/menu-data";
 import { cartTotal, crearPedido, useStore } from "@/lib/store";
 import { getClienteLocal, guardarCliente, normalizarTelefono } from "@/lib/clientes";
 import { MapaUbicacion } from "@/components/MapaUbicacion";
+import { buscarBarrios, useTarifasDomicilio, type TarifaDomicilio } from "@/lib/tarifas-domicilio";
 
 export const Route = createFileRoute("/pedido")({
   head: () => ({
@@ -38,9 +39,12 @@ function Checkout() {
   const cart = useStore((s) => s.cart);
   const negocioAbierto = useStore((s) => s.config.negocio_abierto) && dentroDeHorario();
   const subtotal = cartTotal(cart);
+  const { tarifas, cargando: cargandoTarifas } = useTarifasDomicilio();
 
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
+  const [barrioTexto, setBarrioTexto] = useState("");
+  const [barrioSel, setBarrioSel] = useState<TarifaDomicilio | null>(null);
   const [direccion, setDireccion] = useState("");
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
@@ -48,6 +52,8 @@ function Checkout() {
   const [medio, setMedio] = useState<(typeof MEDIOS)[number]["id"]>("efectivo");
   const [billete, setBillete] = useState("");
   const [error, setError] = useState("");
+  const [listaAbierta, setListaAbierta] = useState(false);
+  const barrioRef = useRef<HTMLDivElement>(null);
 
   // Precarga los datos del cliente guardados en el mini-login.
   useEffect(() => {
@@ -58,15 +64,54 @@ function Checkout() {
     }
   }, []);
 
+  // Cierra la lista desplegable al hacer clic fuera del combobox.
+  useEffect(() => {
+    function alClicFuera(e: MouseEvent) {
+      if (barrioRef.current && !barrioRef.current.contains(e.target as Node)) {
+        setListaAbierta(false);
+      }
+    }
+    document.addEventListener("mousedown", alClicFuera);
+    return () => document.removeEventListener("mousedown", alClicFuera);
+  }, []);
+
+  const coincidencias = useMemo(() => buscarBarrios(tarifas, barrioTexto), [tarifas, barrioTexto]);
+
+  const valorDomicilio = barrioSel?.tarifa ?? 0;
+  const total = subtotal + valorDomicilio;
   const recibido = Number(billete.replace(/\D/g, "")) || 0;
-  const vuelto = recibido - subtotal;
+  const vuelto = recibido - total;
+
+  function seleccionarBarrio(t: TarifaDomicilio) {
+    setBarrioTexto(t.ubicacion);
+    setBarrioSel(t);
+    setListaAbierta(false);
+    setError("");
+  }
+
+  function cambiarBarrioTexto(v: string) {
+    setBarrioTexto(v);
+    setBarrioSel(null);
+    setListaAbierta(true);
+    setError("");
+  }
 
   async function confirmar() {
-    if (!nombre.trim() || telefono.trim().length < 7 || !direccion.trim()) {
-      setError("Completa nombre, teléfono y dirección de entrega.");
+    if (!nombre.trim() || telefono.trim().length < 7) {
+      setError("Completa nombre y teléfono.");
       return;
     }
-    if (medio === "efectivo" && recibido < subtotal) {
+    if (!barrioSel) {
+      setError(
+        "Selecciona un barrio válido de la lista. Si no aparece, verifica la ortografía o contáctanos por WhatsApp.",
+      );
+      return;
+    }
+    if (!direccion.trim()) {
+      setError("Completa la dirección exacta (calle, torre/apto, punto de referencia).");
+      return;
+    }
+    if (medio === "efectivo" && recibido < total) {
       setError("El valor con el que pagas debe ser igual o mayor al total.");
       return;
     }
@@ -78,6 +123,8 @@ function Checkout() {
       cliente_nombre: nombre.trim(),
       cliente_telefono: telefonoNormalizado,
       direccion_entrega: direccion.trim(),
+      barrio: barrioSel.ubicacion,
+      valor_domicilio: barrioSel.tarifa,
       medio_pago: medio,
       monto_efectivo_recibido: medio === "efectivo" ? recibido : null,
       items: cart,
@@ -101,6 +148,9 @@ function Checkout() {
     );
   }
 
+  const barrioNoEncontrado =
+    barrioTexto.trim().length > 0 && !barrioSel && coincidencias.length === 0;
+
   return (
     <main className="mx-auto min-h-screen max-w-lg px-4 pb-16">
       <header className="flex items-center gap-3 py-4">
@@ -121,14 +171,18 @@ function Checkout() {
             <span className="text-primary">{formatCOP(i.precio_unitario * i.cantidad)}</span>
           </div>
         ))}
-        <div className="mt-3 flex justify-between border-t border-border pt-3 font-display text-2xl">
+        <div className="mt-3 flex justify-between border-t border-border pt-3 text-sm">
           <span>Subtotal</span>
           <span className="text-primary">{formatCOP(subtotal)}</span>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          El valor del domicilio lo confirma la caja según tu dirección. Te avisaremos aquí cuando
-          esté listo para pagar.
-        </p>
+        <div className="flex justify-between pt-1 text-sm">
+          <span>Domicilio</span>
+          <span className="text-primary">{barrioSel ? formatCOP(valorDomicilio) : "—"}</span>
+        </div>
+        <div className="mt-1 flex justify-between border-t border-border pt-2 font-display text-2xl">
+          <span>Total</span>
+          <span className="text-primary">{formatCOP(total)}</span>
+        </div>
       </section>
 
       <section className="mt-5 space-y-3">
@@ -140,9 +194,64 @@ function Checkout() {
           placeholder="300 000 0000"
           type="tel"
         />
+
+        {/* Barrio — combobox con búsqueda */}
+        <div ref={barrioRef} className="relative">
+          <span className="text-xs tracking-widest text-muted-foreground uppercase">Barrio</span>
+          <div className="mt-1 flex items-center gap-2 rounded-xl bg-input px-3 focus-within:ring-2 focus-within:ring-ring">
+            <input
+              value={barrioTexto}
+              onChange={(e) => cambiarBarrioTexto(e.target.value)}
+              onFocus={() => setListaAbierta(true)}
+              placeholder="Escribe tu barrio…"
+              className="flex-1 bg-transparent py-3 text-sm outline-none"
+              autoComplete="off"
+            />
+            {cargandoTarifas ? (
+              <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+            ) : (
+              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+            )}
+          </div>
+
+          {listaAbierta && !cargandoTarifas && coincidencias.length > 0 && (
+            <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-border bg-card shadow-card">
+              {coincidencias.map((t) => (
+                <li key={t.ubicacion}>
+                  <button
+                    type="button"
+                    onClick={() => seleccionarBarrio(t)}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm hover:bg-primary/10"
+                  >
+                    <span>{t.ubicacion}</span>
+                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {formatCOP(t.tarifa)}
+                      {barrioSel?.ubicacion === t.ubicacion && (
+                        <Check className="size-4 text-primary" />
+                      )}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {barrioNoEncontrado && (
+            <p className="mt-1 text-xs text-destructive">
+              Barrio no encontrado, verifica la ortografía o contáctanos por WhatsApp.
+            </p>
+          )}
+          {barrioSel && (
+            <p className="mt-1 text-xs text-primary">
+              📍 {barrioSel.ubicacion} · Domicilio {formatCOP(barrioSel.tarifa)}
+            </p>
+          )}
+        </div>
+
+        {/* Dirección exacta */}
         <label className="block">
           <span className="text-xs tracking-widest text-muted-foreground uppercase">
-            Dirección de entrega
+            Dirección exacta
           </span>
           <div className="mt-1 flex gap-2">
             <button
@@ -156,7 +265,7 @@ function Checkout() {
               value={direccion}
               onChange={(e) => setDireccion(e.target.value)}
               rows={2}
-              placeholder="Barrio, calle, torre/apto, punto de referencia"
+              placeholder="Calle, torre/apto, punto de referencia"
               className="flex-1 rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
