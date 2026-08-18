@@ -8,12 +8,16 @@ import {
   XCircle,
   Loader2,
   MessageCircle,
+  Star,
+  Send,
 } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { getClienteLocal, normalizarTelefono } from "@/lib/clientes";
 import { usePedidosRealtime, type PedidoDb } from "@/lib/use-pedidos";
 import { linkPago } from "@/lib/documentos";
 import { ESTADOS_FLUJO, ESTADO_LABEL } from "@/lib/store";
+import { cargarValoraciones, crearValoracion, type ValoracionDb } from "@/lib/valoraciones";
+import { StarRating } from "@/components/StarRating";
 
 export const Route = createFileRoute("/mi-chicharronera")({
   head: () => ({
@@ -88,8 +92,9 @@ function MiChicharronera() {
           ¡Quiubo! Bienvenido a tu Chicharronera 🐷
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Aquí puedes seguir tus pedidos en tiempo real, ver el estado de tu comanda y pagar cuando
-          esté pendiente. Si tienes dudas, escríbenos por WhatsApp.
+          Aquí puedes seguir tus pedidos en tiempo real, ver el estado de tu comanda, pagar cuando
+          esté pendiente y calificar los platos que ya te entregaron. Si tienes dudas, escríbenos
+          por WhatsApp.
         </p>
       </div>
 
@@ -106,7 +111,7 @@ function MiChicharronera() {
       ) : (
         <div className="space-y-4">
           {activos.map((p) => (
-            <PedidoCard key={p.id} pedido={p} />
+            <PedidoCard key={p.id} pedido={p} telefono={telefonoNormalizado} />
           ))}
 
           {cancelados.length > 0 && (
@@ -116,7 +121,7 @@ function MiChicharronera() {
               </p>
               <div className="space-y-4 opacity-60">
                 {cancelados.map((p) => (
-                  <PedidoCard key={p.id} pedido={p} />
+                  <PedidoCard key={p.id} pedido={p} telefono={telefonoNormalizado} />
                 ))}
               </div>
             </div>
@@ -127,8 +132,30 @@ function MiChicharronera() {
   );
 }
 
-function PedidoCard({ pedido: p }: { pedido: PedidoDb }) {
+function PedidoCard({ pedido: p, telefono }: { pedido: PedidoDb; telefono: string | null }) {
   const idxActual = ESTADOS_FLUJO.indexOf(p.estado as (typeof ESTADOS_FLUJO)[number]);
+  const entregado = p.estado === "entregado";
+  const [valoraciones, setValoraciones] = useState<ValoracionDb[]>([]);
+  const [calificando, setCalificando] = useState(false);
+
+  // Cargar valoraciones existentes de este pedido
+  useEffect(() => {
+    if (!entregado || !p.items?.length) return;
+    let activo = true;
+    void Promise.all(
+      (p.items ?? []).filter((i) => i.producto_id).map((i) => cargarValoraciones(i.producto_id!)),
+    ).then((resultados) => {
+      if (!activo) return;
+      const todas = resultados.flat();
+      setValoraciones(todas.filter((v) => v.pedido_id === p.id));
+    });
+    return () => {
+      activo = false;
+    };
+  }, [entregado, p.id, p.items]);
+
+  const valorado = (item: { producto_id: string | null }) =>
+    item.producto_id ? valoraciones.some((v) => v.producto_id === item.producto_id) : false;
 
   return (
     <article className="rounded-2xl border border-border bg-card p-4 shadow-card">
@@ -177,6 +204,179 @@ function PedidoCard({ pedido: p }: { pedido: PedidoDb }) {
           <MessageCircle className="size-5" /> Pagar ahora · {formatCOP(p.total)}
         </a>
       )}
+
+      {/* Califica tu plato — solo cuando el pedido fue entregado */}
+      {entregado && p.items && p.items.length > 0 && (
+        <div className="mt-4 border-t border-border pt-4">
+          <p className="mb-2 flex items-center gap-1.5 text-xs tracking-widest text-muted-foreground uppercase">
+            <Star className="size-3.5 text-primary" /> Califica tu plato
+          </p>
+          <div className="space-y-2">
+            {p.items
+              .filter((i) => i.producto_id)
+              .map((item) => (
+                <div
+                  key={item.key}
+                  className="flex items-center justify-between gap-2 rounded-xl border border-border bg-muted/20 px-3 py-2"
+                >
+                  <span className="min-w-0 truncate text-sm">
+                    {item.cantidad}x {item.nombre}
+                  </span>
+                  {valorado(item) ? (
+                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                      ✓ Calificado
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => setCalificando(true)}
+                      className="shrink-0 rounded-full bg-brasa px-3 py-1 text-xs font-bold text-primary-foreground"
+                    >
+                      Calificar
+                    </button>
+                  )}
+                </div>
+              ))}
+          </div>
+
+          {calificando && (
+            <CalificarPlato
+              pedido={p}
+              telefono={telefono}
+              onCerrar={() => setCalificando(false)}
+              onValorado={(v) => setValoraciones((prev) => [...prev, v])}
+            />
+          )}
+        </div>
+      )}
     </article>
+  );
+}
+
+function CalificarPlato({
+  pedido,
+  telefono,
+  onCerrar,
+  onValorado,
+}: {
+  pedido: PedidoDb;
+  telefono: string | null;
+  onCerrar: () => void;
+  onValorado: (v: ValoracionDb) => void;
+}) {
+  // Items que aún no han sido calificados
+  const itemsConProducto = (pedido.items ?? []).filter((i) => i.producto_id && i.producto_id);
+  const [idx, setIdx] = useState(0);
+  const item = itemsConProducto[idx];
+  const [calificacionLocal, setCalificacionLocal] = useState(0);
+  const [comentario, setComentario] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState("");
+
+  if (!item || !item.producto_id || pedido.estado !== "entregado") return null;
+
+  const productoId = item.producto_id;
+
+  async function enviar() {
+    if (calificacionLocal < 1) {
+      setError("Selecciona al menos 1 estrella.");
+      return;
+    }
+    if (!telefono) {
+      setError("No pudimos verificar tu teléfono. Recarga la página.");
+      return;
+    }
+    setEnviando(true);
+    setError("");
+    const res = await crearValoracion({
+      pedido_id: pedido.id,
+      producto_id: productoId,
+      cliente_nombre: pedido.cliente_nombre,
+      cliente_telefono: telefono,
+      calificacion: calificacionLocal,
+      ...(comentario.trim() ? { comentario: comentario.trim() } : {}),
+    });
+    setEnviando(false);
+
+    if (!res.ok) {
+      setError(res.error ?? "No se pudo guardar la valoración. Intenta de nuevo.");
+      return;
+    }
+
+    onValorado({
+      id: crypto.randomUUID(),
+      pedido_id: pedido.id,
+      pedido_item_id: null,
+      producto_id: productoId,
+      cliente_nombre: pedido.cliente_nombre,
+      cliente_telefono: telefono,
+      calificacion: calificacionLocal,
+      comentario: comentario.trim() || null,
+      creado_en: new Date().toISOString(),
+    });
+
+    if (idx + 1 < itemsConProducto.length) {
+      setIdx(idx + 1);
+      setCalificacionLocal(0);
+      setComentario("");
+    } else {
+      onCerrar();
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="font-semibold">{item.nombre}</p>
+          <p className="text-xs text-muted-foreground">
+            {idx + 1} de {itemsConProducto.length} · Pedido {pedido.numero_comanda}
+          </p>
+        </div>
+        <button
+          onClick={onCerrar}
+          aria-label="Cerrar"
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <XCircle className="size-4" />
+        </button>
+      </div>
+
+      <div className="mt-3 flex flex-col items-center gap-1">
+        <StarRating
+          value={calificacionLocal}
+          tamano={32}
+          interactive
+          onChange={setCalificacionLocal}
+        />
+        <p className="text-xs text-muted-foreground">
+          {calificacionLocal > 0
+            ? `${calificacionLocal} ${calificacionLocal === 1 ? "estrella" : "estrellas"}`
+            : "Toca las estrellas para calificar"}
+        </p>
+      </div>
+
+      <textarea
+        value={comentario}
+        onChange={(e) => setComentario(e.target.value)}
+        rows={3}
+        placeholder="Cuéntanos qué tal estuvo (opcional)…"
+        className="mt-3 w-full rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+      />
+
+      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+
+      <button
+        onClick={() => void enviar()}
+        disabled={enviando}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-brasa py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-50"
+      >
+        <Send className="size-4" />
+        {enviando
+          ? "Enviando…"
+          : idx + 1 < itemsConProducto.length
+            ? "Guardar y calificar siguiente"
+            : "Enviar valoración"}
+      </button>
+    </div>
   );
 }

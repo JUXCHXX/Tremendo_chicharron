@@ -1,12 +1,20 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ShoppingBag, Plus, Minus, X } from "lucide-react";
+import { ArrowLeft, ShoppingBag, Plus, Minus, X, Star } from "lucide-react";
 import { VARIANTES_PICADA, dentroDeHorario, formatCOP } from "@/lib/menu-data";
 import { addToCart, cartTotal, updateCantidad, useStore } from "@/lib/store";
 import { useMenuData, type ProductoDb } from "@/lib/use-menu-data";
 import { Model3DPlaceholder } from "@/components/Model3DPlaceholder";
 import { DonVelto } from "@/components/DonVelto";
 import { FooterMenu } from "@/components/Marca";
+import { StarRating } from "@/components/StarRating";
+import {
+  cargarResumenValoraciones,
+  cargarValoraciones,
+  avatarDesdeNombre,
+  type ValoracionDb,
+  type ResumenValoracion,
+} from "@/lib/valoraciones";
 
 export const Route = createFileRoute("/menu")({
   head: () => ({
@@ -51,6 +59,14 @@ function Menu() {
   const [categoriaAbierta, setCategoriaAbierta] = useState<string | null>(null);
   const [seleccion, setSeleccion] = useState<ProductoDb | null>(null);
   const [carritoAbierto, setCarritoAbierto] = useState(false);
+  const [resumenValoraciones, setResumenValoraciones] = useState<Record<string, ResumenValoracion>>(
+    {},
+  );
+
+  // Carga el resumen de valoraciones (promedio + cantidad) de todos los platos
+  useEffect(() => {
+    void cargarResumenValoraciones().then(setResumenValoraciones);
+  }, []);
 
   // Alterna entre las dos sub-marcas con crossfade
   const [submarca, setSubmarca] = useState(0);
@@ -198,6 +214,7 @@ function Menu() {
                           : precio
                             ? formatCOP(precio)
                             : "Precio por definir";
+                        const resumen = resumenValoraciones[p.id];
                         return (
                           <button
                             key={p.id}
@@ -207,11 +224,13 @@ function Menu() {
                               agotado ? "cursor-not-allowed opacity-60" : "hover:bg-muted/30"
                             }`}
                           >
-                            <img
-                              src={p.imagen_url ?? `/${slugifyNombre(p.nombre)}.png`}
-                              alt=""
-                              className="size-20 shrink-0 rounded-xl object-cover"
-                            />
+                            <div className="relative size-20 shrink-0 overflow-hidden rounded-xl">
+                              <img
+                                src={p.imagen_url ?? `/${slugifyNombre(p.nombre)}.png`}
+                                alt=""
+                                className="absolute inset-0 h-full w-full object-cover object-center"
+                              />
+                            </div>
                             <span className="min-w-0 flex-1">
                               <span className="block truncate font-semibold text-foreground">
                                 {p.nombre}
@@ -219,6 +238,18 @@ function Menu() {
                               <span className="line-clamp-2 block text-xs text-muted-foreground">
                                 {p.descripcion}
                               </span>
+                              {resumen && resumen.cantidad > 0 && (
+                                <span className="mt-0.5 flex items-center gap-1 text-xs text-primary">
+                                  <StarRating value={resumen.promedio} tamano={12} />
+                                  <span className="font-semibold">
+                                    {resumen.promedio.toFixed(1)} ★
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    ({resumen.cantidad}{" "}
+                                    {resumen.cantidad === 1 ? "valoración" : "valoraciones"})
+                                  </span>
+                                </span>
+                              )}
                               <span className="mt-0.5 block font-display text-lg text-primary">
                                 {textoPrecio}
                               </span>
@@ -315,6 +346,7 @@ function Menu() {
           producto={seleccion}
           precioBase={precioDe(seleccion)}
           onClose={() => setSeleccion(null)}
+          resumen={resumenValoraciones[seleccion.id] ?? undefined}
         />
       )}
     </main>
@@ -323,23 +355,51 @@ function Menu() {
 
 function Modal({
   titulo,
+  imagen,
   children,
   onClose,
 }: {
   titulo: string;
+  imagen?: string | null;
   children: React.ReactNode;
   onClose: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4">
-      <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-primary/25 bg-popover p-5 shadow-glow sm:rounded-3xl">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <h2 className="font-display text-2xl text-primary">{titulo}</h2>
-          <button onClick={onClose} aria-label="Cerrar" className="text-muted-foreground">
-            <X className="size-5" />
-          </button>
-        </div>
-        {children}
+      <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-primary/25 bg-popover shadow-glow sm:rounded-3xl">
+        {imagen ? (
+          <>
+            {/* Imagen del plato completa: object-contain muestra la foto entera sin recortes */}
+            <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden rounded-t-3xl bg-black/40">
+              <img
+                src={imagen}
+                alt={titulo}
+                className="absolute inset-0 h-full w-full object-contain object-center"
+              />
+              <button
+                onClick={onClose}
+                aria-label="Cerrar"
+                className="absolute top-3 right-3 rounded-full bg-black/50 p-2 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+            <div className="p-5">
+              <h2 className="font-display text-2xl text-primary">{titulo}</h2>
+              {children}
+            </div>
+          </>
+        ) : (
+          <div className="p-5">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <h2 className="font-display text-2xl text-primary">{titulo}</h2>
+              <button onClick={onClose} aria-label="Cerrar" className="text-muted-foreground">
+                <X className="size-5" />
+              </button>
+            </div>
+            {children}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -349,30 +409,56 @@ function AgregarProducto({
   producto,
   precioBase,
   onClose,
+  resumen,
 }: {
   producto: ProductoDb;
   precioBase: number | null;
   onClose: () => void;
+  resumen?: ResumenValoracion | undefined;
 }) {
   const [personas, setPersonas] = useState(VARIANTES_PICADA[0]!.personas);
   const [cantidad, setCantidad] = useState(1);
   const [notas, setNotas] = useState("");
   const [combo, setCombo] = useState(false);
+  const [valoraciones, setValoraciones] = useState<ValoracionDb[]>([]);
+  const [cargandoValoraciones, setCargandoValoraciones] = useState(true);
+
+  useEffect(() => {
+    let activo = true;
+    setCargandoValoraciones(true);
+    void cargarValoraciones(producto.id).then((v) => {
+      if (activo) {
+        setValoraciones(v);
+        setCargandoValoraciones(false);
+      }
+    });
+    return () => {
+      activo = false;
+    };
+  }, [producto.id]);
 
   const precio = producto.por_persona
     ? (VARIANTES_PICADA.find((v) => v.personas === personas)?.precio ?? 0)
     : (precioBase ?? 0);
 
   return (
-    <Modal titulo={producto.nombre} onClose={onClose}>
-      {producto.imagen_url && (
-        <img
-          src={producto.imagen_url}
-          alt=""
-          className="mb-3 h-40 w-full rounded-2xl object-cover"
-        />
-      )}
+    <Modal
+      titulo={producto.nombre}
+      imagen={producto.imagen_url ?? `/${slugifyNombre(producto.nombre)}.png`}
+      onClose={onClose}
+    >
       <p className="text-sm text-muted-foreground">{producto.descripcion}</p>
+
+      {/* Resumen de valoraciones */}
+      {resumen && resumen.cantidad > 0 && (
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2">
+          <StarRating value={resumen.promedio} tamano={18} />
+          <span className="font-display text-xl text-primary">{resumen.promedio.toFixed(1)}</span>
+          <span className="text-xs text-muted-foreground">
+            · {resumen.cantidad} {resumen.cantidad === 1 ? "valoración" : "valoraciones"}
+          </span>
+        </div>
+      )}
 
       {producto.por_persona && (
         <div className="mt-4">
@@ -456,6 +542,49 @@ function AgregarProducto({
       >
         Agregar al pedido
       </button>
+
+      {/* Lista de valoraciones individuales */}
+      {cargandoValoraciones ? (
+        <p className="mt-5 text-center text-xs text-muted-foreground">Cargando valoraciones…</p>
+      ) : valoraciones.length > 0 ? (
+        <div className="mt-6 border-t border-border pt-4">
+          <p className="mb-3 flex items-center gap-1.5 text-xs tracking-widest text-muted-foreground uppercase">
+            <Star className="size-3.5" /> Valoraciones de clientes
+          </p>
+          <div className="space-y-4">
+            {valoraciones.map((v) => {
+              const avatar = avatarDesdeNombre(v.cliente_nombre);
+              return (
+                <div key={v.id} className="flex gap-3">
+                  <div
+                    className="flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-foreground"
+                    style={{ backgroundColor: avatar.color }}
+                    aria-hidden
+                  >
+                    {avatar.iniciales}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-sm font-semibold">{v.cliente_nombre}</p>
+                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                        {new Date(v.creado_en).toLocaleDateString("es-CO", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+                    </div>
+                    <StarRating value={v.calificacion} tamano={13} />
+                    {v.comentario && (
+                      <p className="mt-1 text-sm text-muted-foreground">{v.comentario}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
     </Modal>
   );
 }
