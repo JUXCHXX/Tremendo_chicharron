@@ -171,7 +171,16 @@ function Menu() {
         <div className="space-y-4">
           {categorias.map((c) => {
             const abierta = categoriaAbierta === c.id;
-            const productosCat = productos.filter((p) => p.categoria_id === c.id);
+            // Platos disponibles primero, agotados al final (orden dinámico)
+            const productosCat = productos
+              .filter((p) => p.categoria_id === c.id)
+              .sort((a, b) => {
+                const aAgotado = agotados.includes(a.id) || !a.disponible;
+                const bAgotado = agotados.includes(b.id) || !b.disponible;
+                if (aAgotado && !bAgotado) return 1;
+                if (!aAgotado && bAgotado) return -1;
+                return a.orden - b.orden;
+              });
             const destacado = productos.find((p) => p.id === c.plato_destacado_id);
             const portada = IMAGENES_CATEGORIA[c.nombre] ?? "";
             return (

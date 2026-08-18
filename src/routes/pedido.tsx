@@ -1,8 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, ChevronDown, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Loader2, Sparkles, Plus } from "lucide-react";
 import { formatCOP, dentroDeHorario } from "@/lib/menu-data";
-import { cartTotal, crearPedido, useStore } from "@/lib/store";
+import { addToCart, cartTotal, crearPedido, useStore } from "@/lib/store";
 import { getClienteLocal, guardarCliente, normalizarTelefono } from "@/lib/clientes";
 import { MapaUbicacion } from "@/components/MapaUbicacion";
 import { buscarBarrios, useTarifasDomicilio, type TarifaDomicilio } from "@/lib/tarifas-domicilio";
@@ -32,6 +32,42 @@ const MEDIOS = [
   { id: "efectivo", label: "Efectivo", icono: "/efectivo.png" },
   { id: "transferencia", label: "Transferencia", icono: "/transferencias.png" },
   { id: "tarjeta", label: "Tarjeta", icono: "/transferencias.png" },
+] as const;
+
+// Combos sugeridos para "Completa tu pedido" (entrada + bebida)
+const COMBOS_SUGERIDOS = [
+  {
+    id: "combo-mazamorra-limonada",
+    entrada: {
+      producto_id: "pic-mazamorra",
+      nombre: "Tremenda Mazamorra Michelada",
+      precio: 15000,
+    },
+    bebida: { producto_id: "beb-limonada", nombre: "Limonada natural", precio: 10000 },
+    total: 25000,
+  },
+  {
+    id: "combo-chuzarron-gaseosa",
+    entrada: { producto_id: "pic-chuzarron", nombre: "Tremendo Chuzarrón", precio: 22000 },
+    bebida: { producto_id: "beb-gaseosa", nombre: "Gaseosa Postobón", precio: 6000 },
+    total: 28000,
+  },
+  {
+    id: "combo-mazamorra-gaseosa",
+    entrada: {
+      producto_id: "pic-mazamorra",
+      nombre: "Tremenda Mazamorra Michelada",
+      precio: 15000,
+    },
+    bebida: { producto_id: "beb-gaseosa", nombre: "Gaseosa Postobón", precio: 6000 },
+    total: 21000,
+  },
+  {
+    id: "combo-chuzarron-limonada",
+    entrada: { producto_id: "pic-chuzarron", nombre: "Tremendo Chuzarrón", precio: 22000 },
+    bebida: { producto_id: "beb-limonada", nombre: "Limonada natural", precio: 10000 },
+    total: 32000,
+  },
 ] as const;
 
 function Checkout() {
@@ -76,6 +112,22 @@ function Checkout() {
   }, []);
 
   const coincidencias = useMemo(() => buscarBarrios(tarifas, barrioTexto), [tarifas, barrioTexto]);
+
+  // Recomendación inteligente: sugiere un combo que NO esté ya en el carrito
+  const comboRecomendado = useMemo(() => {
+    const idsEnCarrito = new Set(cart.map((i) => i.producto_id));
+    // Prioriza combos donde ni la entrada ni la bebida estén en el carrito
+    const disponibles = COMBOS_SUGERIDOS.filter(
+      (c) => !idsEnCarrito.has(c.entrada.producto_id) && !idsEnCarrito.has(c.bebida.producto_id),
+    );
+    if (disponibles.length > 0) return disponibles[0];
+    // Si todos tienen algo en el carrito, sugiere el primero que no tenga la entrada
+    const sinEntrada = COMBOS_SUGERIDOS.find((c) => !idsEnCarrito.has(c.entrada.producto_id));
+    if (sinEntrada) return sinEntrada;
+    // Si todos tienen la entrada, sugiere el primero que no tenga la bebida
+    const sinBebida = COMBOS_SUGERIDOS.find((c) => !idsEnCarrito.has(c.bebida.producto_id));
+    return sinBebida ?? null;
+  }, [cart]);
 
   const valorDomicilio = barrioSel?.tarifa ?? 0;
   const total = subtotal + valorDomicilio;
@@ -184,6 +236,47 @@ function Checkout() {
           <span className="text-primary">{formatCOP(total)}</span>
         </div>
       </section>
+
+      {/* Completa tu pedido — recomendación inteligente */}
+      {comboRecomendado && (
+        <section className="mt-5 rounded-2xl border border-accent/50 bg-gradient-to-br from-card to-card/80 p-4 shadow-glow">
+          <p className="flex items-center gap-1.5 text-xs tracking-widest text-accent uppercase">
+            <Sparkles className="size-3.5" /> Completa tu pedido
+          </p>
+          <p className="mt-1 font-display text-xl text-primary">
+            + {comboRecomendado.entrada.nombre} + {comboRecomendado.bebida.nombre}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Agrega ambos por{" "}
+            <span className="font-semibold text-primary">{formatCOP(comboRecomendado.total)}</span>
+          </p>
+          <button
+            onClick={() => {
+              addToCart({
+                producto_id: comboRecomendado.entrada.producto_id,
+                nombre: comboRecomendado.entrada.nombre,
+                cantidad: 1,
+                variante_personas: null,
+                notas: "",
+                precio_unitario: comboRecomendado.entrada.precio,
+                combo: false,
+              });
+              addToCart({
+                producto_id: comboRecomendado.bebida.producto_id,
+                nombre: comboRecomendado.bebida.nombre,
+                cantidad: 1,
+                variante_personas: null,
+                notas: "",
+                precio_unitario: comboRecomendado.bebida.precio,
+                combo: false,
+              });
+            }}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-brasa py-2.5 text-sm font-bold text-primary-foreground"
+          >
+            <Plus className="size-4" /> Agregar combo al pedido
+          </button>
+        </section>
+      )}
 
       <section className="mt-5 space-y-3">
         <Campo label="Nombre" value={nombre} onChange={setNombre} placeholder="Tu nombre" />
