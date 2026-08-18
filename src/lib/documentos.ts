@@ -2,6 +2,7 @@ import { formatCOP } from "./menu-data";
 import type { Pedido } from "./store";
 import { ESTADO_LABEL } from "./store";
 import { obtenerNit } from "./supabase";
+import { jsPDF } from "jspdf";
 
 function abrirImpresion(titulo: string, cuerpo: string) {
   const w = window.open("", "_blank", "width=420,height=720");
@@ -77,6 +78,136 @@ export async function descargarFactura(pd: Pedido) {
      </table>
      <hr/><small>Gracias por tu compra. Manizales, Colombia.</small>`,
   );
+}
+
+/**
+ * Factura en PDF con formato profesional (jsPDF).
+ * Incluye encabezado con logo, NIT, datos de contacto, comanda, cliente,
+ * tabla de productos, desglose de totales y medio de pago.
+ */
+export async function descargarFacturaPdf(pd: Pedido) {
+  const nit = await obtenerNit();
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const W = 210;
+  const M = 15;
+  let y = 20;
+
+  // ── Encabezado ──
+  doc.setFillColor(20, 20, 20);
+  doc.rect(0, 0, W, 30, "F");
+  doc.setTextColor(255, 200, 0);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text("TREMENDO CHICHARRÓN", M, 14);
+  doc.setFontSize(9);
+  doc.setTextColor(255, 255, 255);
+  doc.text("Comercializadora Tremendo Chicharrón SAS", M, 20);
+  doc.text(`NIT: ${nit}`, M, 24);
+  doc.text("Manizales, Colombia", M, 28);
+
+  // ── Número de comanda y fecha ──
+  y = 40;
+  doc.setTextColor(20, 20, 20);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text(`FACTURA ${pd.numero_comanda}`, M, y);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Fecha: ${new Date(pd.creado_en).toLocaleString("es-CO")}`, W - M, y, {
+    align: "right",
+  });
+  y += 8;
+  doc.text(`Versión: v${pd.version}`, W - M, y, { align: "right" });
+
+  // ── Datos del cliente ──
+  y += 8;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(M, y, W - M, y);
+  y += 6;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(20, 20, 20);
+  doc.text("DATOS DEL CLIENTE", M, y);
+  y += 6;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(`Cliente: ${pd.cliente_nombre}`, M, y);
+  doc.text(`Teléfono: ${pd.cliente_telefono}`, W / 2, y);
+  y += 5;
+  doc.text(`Dirección: ${pd.direccion_entrega}`, M, y);
+  if (pd.barrio) doc.text(`Barrio: ${pd.barrio}`, W / 2, y);
+
+  // ── Tabla de productos ──
+  y += 10;
+  doc.setFillColor(240, 240, 240);
+  doc.rect(M, y - 4, W - 2 * M, 6, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("CANT", M + 2, y);
+  doc.text("PRODUCTO", M + 14, y);
+  doc.text("P. UNIT", W - M - 40, y, { align: "right" });
+  doc.text("SUBTOTAL", W - M - 2, y, { align: "right" });
+  y += 6;
+
+  doc.setFont("helvetica", "normal");
+  pd.items.forEach((i) => {
+    const nombre = `${i.cantidad}x ${i.nombre}${i.variante_personas ? ` (${i.variante_personas} pers.)` : ""}${i.combo ? " + combo" : ""}`;
+    doc.text(String(i.cantidad), M + 2, y);
+    doc.text(nombre, M + 14, y);
+    doc.text(formatCOP(i.precio_unitario), W - M - 40, y, { align: "right" });
+    doc.text(formatCOP(i.precio_unitario * i.cantidad), W - M - 2, y, { align: "right" });
+    if (i.notas) {
+      y += 4;
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Nota: ${i.notas}`, M + 14, y);
+      doc.setFontSize(9);
+      doc.setTextColor(20, 20, 20);
+    }
+    y += 6;
+  });
+
+  // ── Desglose de totales ──
+  y += 4;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(M, y, W - M, y);
+  y += 6;
+  doc.text("Subtotal", M, y);
+  doc.text(formatCOP(pd.subtotal), W - M, y, { align: "right" });
+  y += 6;
+  doc.text("Domicilio", M, y);
+  doc.text(formatCOP(pd.valor_domicilio), W - M, y, { align: "right" });
+  y += 8;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text("TOTAL", M, y);
+  doc.text(formatCOP(pd.total), W - M, y, { align: "right" });
+
+  // ── Medio de pago ──
+  y += 10;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Medio de pago: ${pd.medio_pago}`, M, y);
+  if (pd.medio_pago === "efectivo" && pd.monto_efectivo_recibido != null) {
+    y += 5;
+    doc.text(`Recibe: ${formatCOP(pd.monto_efectivo_recibido)}`, M, y);
+    doc.text(`Vuelto: ${formatCOP(Math.max(pd.vuelto ?? 0, 0))}`, W - M, y, { align: "right" });
+  }
+
+  // ── Pie ──
+  y = 280;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(M, y, W - M, y);
+  y += 6;
+  doc.setFontSize(8);
+  doc.setTextColor(150, 150, 150);
+  doc.text("¡Gracias por tu compra! Tremendo Chicharrón — Manizales, Colombia.", W / 2, y, {
+    align: "center",
+  });
+
+  doc.save(`Factura_${pd.numero_comanda}.pdf`);
 }
 
 /** Mensaje de WhatsApp prellenado para el botón "Ir a Pagar". */

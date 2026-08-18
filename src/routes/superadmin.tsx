@@ -29,6 +29,7 @@ import {
 } from "@/lib/use-menu-data";
 import { marcarRespaldo, useStore } from "@/lib/store";
 import { descargarExcel, descargarPdfReporte } from "@/lib/documentos";
+import { usePedidosRealtime } from "@/lib/use-pedidos";
 
 /** Convierte "Tremendo Bowl Montañero" → "tremendo-bowl-montanero" (placeholder de imagen). */
 function slugifyNombre(nombre: string): string {
@@ -445,12 +446,12 @@ function SuperAdmin() {
 }
 
 function Estadisticas() {
-  const pedidos = useStore((s) => s.pedidos);
+  const { pedidos } = usePedidosRealtime();
   const validos = pedidos.filter((p) => p.estado !== "cancelado");
   const ventas = validos.reduce((a, p) => a + p.total, 0);
   const top = new Map<string, number>();
   validos.forEach((p) =>
-    p.items.forEach((i) => top.set(i.nombre, (top.get(i.nombre) ?? 0) + i.cantidad)),
+    (p.items ?? []).forEach((i) => top.set(i.nombre, (top.get(i.nombre) ?? 0) + i.cantidad)),
   );
   const top5 = [...top.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
 

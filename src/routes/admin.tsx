@@ -7,13 +7,33 @@ import {
   Outlet,
 } from "@tanstack/react-router";
 import { useState } from "react";
-import { Printer, RefreshCcw } from "lucide-react";
+import {
+  Printer,
+  RefreshCcw,
+  LayoutDashboard,
+  History,
+  Settings,
+  LogOut,
+  Home,
+  X,
+} from "lucide-react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { estaAutenticado, cerrarSesion } from "@/lib/auth-staff";
 import { formatCOP } from "@/lib/menu-data";
 import { supabase } from "@/lib/supabase";
 import { usePedidosRealtime, type PedidoDb } from "@/lib/use-pedidos";
 import { ESTADOS_FLUJO, ESTADO_LABEL, type EstadoPedido } from "@/lib/store";
-import { imprimirComanda } from "@/lib/documentos";
+import { imprimirComanda, descargarFacturaPdf } from "@/lib/documentos";
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async ({ location }) => {
@@ -43,25 +63,51 @@ export const Route = createFileRoute("/admin")({
   component: Admin,
 });
 
-const FILTROS: ("todos" | string)[] = [
-  "todos",
-  "pendiente_confirmacion_cajera",
-  ...ESTADOS_FLUJO,
-  "cancelado",
+// Columnas del kanban (estados del flujo principal)
+const COLUMNAS: EstadoPedido[] = [
+  "pendiente_pago",
+  "pago_confirmado",
+  "en_cocina",
+  "en_preparacion",
+  "en_camino",
+  "entregado",
 ];
+
+// Colores distintivos por estado (paleta de marca negro/amarillo)
+const COLOR_ESTADO: Record<string, string> = {
+  pendiente_pago: "border-amber-400 bg-amber-50",
+  pago_confirmado: "border-yellow-500 bg-yellow-50",
+  en_cocina: "border-orange-500 bg-orange-50",
+  en_preparacion: "border-red-500 bg-red-50",
+  en_camino: "border-blue-500 bg-blue-50",
+  entregado: "border-green-500 bg-green-50",
+};
+
+const BADGE_ESTADO: Record<string, string> = {
+  pendiente_pago: "bg-amber-100 text-amber-800",
+  pago_confirmado: "bg-yellow-100 text-yellow-800",
+  en_cocina: "bg-orange-100 text-orange-800",
+  en_preparacion: "bg-red-100 text-red-800",
+  en_camino: "bg-blue-100 text-blue-800",
+  entregado: "bg-green-100 text-green-800",
+};
+
+type Seccion = "pedidos" | "historial" | "config";
 
 function Admin() {
   const navigate = useNavigate();
-  const { pedidos } = usePedidosRealtime();
-  const [filtro, setFiltro] = useState<"todos" | string>("todos");
+  const { pedidos, recargar } = usePedidosRealtime();
+  const [seccion, setSeccion] = useState<Seccion>("pedidos");
+  const [activoId, setActivoId] = useState<string | null>(null);
+  const [activoEstado, setActivoEstado] = useState<EstadoPedido | null>(null);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   // Si estamos en /admin/login, renderizar la ruta hija (el formulario de login)
   const { pathname } = useLocation();
   if (pathname.endsWith("/login")) {
     return <Outlet />;
   }
-
-  const lista = pedidos.filter((p) => filtro === "todos" || p.estado === filtro);
 
   // Actualizar estado en Supabase
   const cambiarEstadoDb = async (id: string, estado: string) => {
@@ -80,129 +126,376 @@ function Admin() {
     if (error) console.error("Error actualizando domicilio:", error);
   };
 
+  const onDragStart = (e: DragStartEvent) => {
+    const id = String(e.active.id);
+    const pd = pedidos.find((p) => p.id === id);
+    if (pd) {
+      setActivoId(id);
+      setActivoEstado(pd.estado as EstadoPedido);
+    }
+  };
+
+  const onDragEnd = (e: DragEndEvent) => {
+    setActivoId(null);
+    setActivoEstado(null);
+    const { active, over } = e;
+    if (!over) return;
+    const id = String(active.id);
+    const nuevoEstado = String(over.id) as EstadoPedido;
+    const pd = pedidos.find((p) => p.id === id);
+    if (pd && pd.estado !== nuevoEstado && COLUMNAS.includes(nuevoEstado)) {
+      void cambiarEstadoDb(id, nuevoEstado);
+    }
+  };
+
+  const pedidosDelDia = pedidos.filter(
+    (p) => p.estado !== "cancelado" && p.estado !== "pendiente_confirmacion_cajera",
+  );
+  const historial = pedidos.filter((p) => p.estado === "cancelado" || p.estado === "entregado");
+
+  const resumenPedido = (pd: PedidoDb) => {
+    if (!pd.items || pd.items.length === 0) return "Sin items";
+    return (
+      pd.items
+        .map((i) => `${i.cantidad}x ${i.nombre}`)
+        .join(", ")
+        .slice(0, 60) + (pd.items.length > 1 ? "…" : "")
+    );
+  };
+
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-4 pb-16">
-      <header className="flex flex-wrap items-center justify-between gap-3 py-5">
-        <div>
-          <h1 className="font-display text-4xl text-primary">Panel de caja</h1>
-          <p className="text-xs text-muted-foreground">
-            Pedidos entrantes, confirmación de pago y comandas
-          </p>
+    <div className="flex min-h-screen bg-background">
+      {/* ── Sidebar ── */}
+      <aside className="flex w-16 flex-col items-center gap-2 border-r border-border bg-card py-4 md:w-56 md:items-stretch md:px-3">
+        <div className="mb-4 flex items-center justify-center gap-2 md:justify-start">
+          <span className="font-display text-2xl text-primary">TC</span>
+          <span className="hidden font-display text-sm text-primary md:block">Panel de caja</span>
         </div>
-        <div className="flex items-center gap-3">
-          <Link to="/" className="text-sm text-muted-foreground hover:text-primary">
-            ← Inicio
+
+        <button
+          onClick={() => setSeccion("pedidos")}
+          className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-colors md:justify-start ${
+            seccion === "pedidos"
+              ? "bg-brasa text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted/30"
+          }`}
+        >
+          <LayoutDashboard className="size-4" />
+          <span className="hidden md:block">Pedidos del día</span>
+        </button>
+
+        <button
+          onClick={() => setSeccion("historial")}
+          className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-colors md:justify-start ${
+            seccion === "historial"
+              ? "bg-brasa text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted/30"
+          }`}
+        >
+          <History className="size-4" />
+          <span className="hidden md:block">Historial</span>
+        </button>
+
+        <button
+          onClick={() => setSeccion("config")}
+          className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-colors md:justify-start ${
+            seccion === "config"
+              ? "bg-brasa text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted/30"
+          }`}
+        >
+          <Settings className="size-4" />
+          <span className="hidden md:block">Configuración</span>
+        </button>
+
+        <div className="mt-auto flex flex-col gap-2">
+          <button
+            onClick={() => void recargar()}
+            className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm text-muted-foreground hover:bg-muted/30 md:justify-start"
+            title="Recargar"
+          >
+            <RefreshCcw className="size-4" />
+            <span className="hidden md:block">Recargar</span>
+          </button>
+          <Link
+            to="/"
+            className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm text-muted-foreground hover:bg-muted/30 md:justify-start"
+          >
+            <Home className="size-4" />
+            <span className="hidden md:block">Inicio</span>
           </Link>
           <button
             onClick={() => {
               void cerrarSesion();
               void navigate({ to: "/admin/login" });
             }}
-            className="rounded-xl border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-destructive"
+            className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm text-destructive hover:bg-destructive/10 md:justify-start"
           >
-            Cerrar sesión
+            <LogOut className="size-4" />
+            <span className="hidden md:block">Salir</span>
           </button>
         </div>
-      </header>
+      </aside>
 
-      <div className="flex flex-wrap gap-2">
-        {FILTROS.map((f) => (
-          <button
-            key={f}
-            onClick={() => setFiltro(f)}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-              filtro === f ? "bg-brasa text-primary-foreground" : "border border-border bg-card"
-            }`}
-          >
-            {f === "todos" ? "Todos" : (ESTADO_LABEL[f as EstadoPedido] ?? f)}
-          </button>
-        ))}
-      </div>
-
-      {lista.length === 0 && (
-        <p className="mt-10 text-sm text-muted-foreground">No hay pedidos en este filtro.</p>
-      )}
-
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        {lista.map((pd) => (
-          <article key={pd.id} className="rounded-2xl border border-border bg-card p-4 shadow-card">
-            <div className="flex items-start justify-between gap-3">
+      {/* ── Contenido ── */}
+      <main className="flex-1 overflow-x-auto px-4 pb-16">
+        {seccion === "pedidos" && (
+          <>
+            <header className="flex flex-wrap items-center justify-between gap-3 py-5">
               <div>
-                <p className="font-display text-2xl text-primary">{pd.numero_comanda}</p>
+                <h1 className="font-display text-3xl text-primary">Pedidos del día</h1>
                 <p className="text-xs text-muted-foreground">
-                  v{pd.version} · {new Date(pd.creado_en).toLocaleString("es-CO")}
+                  Arrastra las tarjetas entre columnas para actualizar el estado
                 </p>
               </div>
-              <span className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                {ESTADO_LABEL[pd.estado as EstadoPedido] ?? pd.estado}
-              </span>
-            </div>
+            </header>
 
-            <div className="mt-3 text-sm">
-              <p>
-                <b>{pd.cliente_nombre}</b> · {pd.cliente_telefono}
+            <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+              <div className="flex gap-4 pb-4">
+                {COLUMNAS.map((estado) => {
+                  const enColumna = pedidosDelDia.filter((p) => p.estado === estado);
+                  return (
+                    <KanbanColumna
+                      key={estado}
+                      estado={estado}
+                      pedidos={enColumna}
+                      onCambiarEstado={cambiarEstadoDb}
+                      onSetDomicilio={setDomicilioDb}
+                    />
+                  );
+                })}
+              </div>
+              <DragOverlay>
+                {activoId && activoEstado ? (
+                  <TarjetaPedido
+                    pd={pedidos.find((p) => p.id === activoId)!}
+                    onCambiarEstado={cambiarEstadoDb}
+                    onSetDomicilio={setDomicilioDb}
+                    overlay
+                  />
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+          </>
+        )}
+
+        {seccion === "historial" && (
+          <>
+            <header className="py-5">
+              <h1 className="font-display text-3xl text-primary">Historial</h1>
+              <p className="text-xs text-muted-foreground">Pedidos entregados y cancelados</p>
+            </header>
+            {historial.length === 0 ? (
+              <p className="mt-10 text-sm text-muted-foreground">No hay pedidos en el historial.</p>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {historial.map((pd) => (
+                  <article
+                    key={pd.id}
+                    className="rounded-2xl border border-border bg-card p-4 shadow-card"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-display text-2xl text-primary">{pd.numero_comanda}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(pd.creado_en).toLocaleString("es-CO")}
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${BADGE_ESTADO[pd.estado] ?? "bg-muted text-muted-foreground"}`}
+                      >
+                        {ESTADO_LABEL[pd.estado as EstadoPedido] ?? pd.estado}
+                      </span>
+                    </div>
+                    <div className="mt-3 text-sm">
+                      <p>
+                        <b>{pd.cliente_nombre}</b> · {pd.cliente_telefono}
+                      </p>
+                      <p className="text-muted-foreground">{pd.direccion_entrega}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{resumenPedido(pd)}</p>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+                      <span className="font-display text-2xl text-primary">
+                        {formatCOP(pd.total)}
+                      </span>
+                      <button
+                        onClick={() => void descargarFacturaPdf(pd as never)}
+                        className="flex items-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
+                      >
+                        <Printer className="size-4" />
+                        Imprimir
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {seccion === "config" && (
+          <>
+            <header className="py-5">
+              <h1 className="font-display text-3xl text-primary">Configuración</h1>
+              <p className="text-xs text-muted-foreground">Ajustes del panel de caja</p>
+            </header>
+            <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
+              <p className="text-sm text-muted-foreground">
+                La configuración avanzada (precios, agotados, negocio abierto) se gestiona desde el
+                panel de superadmin.
               </p>
-              <p className="text-muted-foreground">{pd.direccion_entrega}</p>
-              {pd.barrio && <p className="text-xs text-primary">Barrio: {pd.barrio}</p>}
-              {pd.latitud !== null && pd.longitud !== null && (
-                <p className="text-xs text-muted-foreground">
-                  📍 {pd.latitud.toFixed(5)}, {pd.longitud.toFixed(5)}
-                </p>
-              )}
             </div>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
 
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3 text-sm">
-              <label className="flex items-center gap-2">
-                Domicilio
-                <input
-                  data-domicilio={pd.id}
-                  type="number"
-                  defaultValue={pd.valor_domicilio}
-                  onBlur={(e) => setDomicilioDb(pd.id, Number(e.target.value) || 0, pd)}
-                  className="w-24 rounded-lg bg-input p-1.5 text-sm outline-none"
-                />
-              </label>
-              <span className="ml-auto font-display text-2xl text-primary">
-                {formatCOP(pd.total)}
-              </span>
-            </div>
-
-            <p className="mt-1 text-xs text-muted-foreground">
-              Pago: {pd.medio_pago}
-              {pd.monto_efectivo_recibido != null &&
-                ` · Recibe ${formatCOP(pd.monto_efectivo_recibido)} · Vuelto ${formatCOP(Math.max(pd.vuelto ?? 0, 0))}`}
-            </p>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {pd.estado === "pendiente_pago" && (
-                <button
-                  onClick={() => cambiarEstadoDb(pd.id, "pago_confirmado")}
-                  className="rounded-xl bg-brasa px-4 py-2 text-sm font-semibold text-primary-foreground"
-                >
-                  Confirmar pago
-                </button>
-              )}
-              {ESTADOS_FLUJO.slice(2).map((e) => (
-                <button
-                  key={e}
-                  onClick={() => cambiarEstadoDb(pd.id, e)}
-                  className="rounded-xl border border-border px-3 py-2 text-xs"
-                >
-                  {ESTADO_LABEL[e]}
-                </button>
-              ))}
-              <button
-                onClick={() => {
-                  void supabase?.from("pedidos").update({ estado: "cancelado" }).eq("id", pd.id);
-                }}
-                className="rounded-xl border border-destructive/50 px-3 py-2 text-xs text-destructive"
-              >
-                Cancelar
-              </button>
-            </div>
-          </article>
-        ))}
+// ── Columna Kanban ──
+function KanbanColumna({
+  estado,
+  pedidos,
+  onCambiarEstado,
+  onSetDomicilio,
+}: {
+  estado: EstadoPedido;
+  pedidos: PedidoDb[];
+  onCambiarEstado: (id: string, estado: string) => void;
+  onSetDomicilio: (id: string, valor: number, pd: PedidoDb) => void;
+}) {
+  const { setNodeRef, isOver } = useSortable({ id: estado });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex w-72 shrink-0 flex-col rounded-2xl border-2 bg-muted/20 p-3 ${
+        isOver ? "border-primary/60" : "border-border"
+      }`}
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-foreground">{ESTADO_LABEL[estado]}</h3>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+          {pedidos.length}
+        </span>
       </div>
-    </main>
+      <SortableContext items={pedidos.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+        <div className="flex flex-col gap-3">
+          {pedidos.map((pd) => (
+            <TarjetaPedido
+              key={pd.id}
+              pd={pd}
+              onCambiarEstado={onCambiarEstado}
+              onSetDomicilio={onSetDomicilio}
+            />
+          ))}
+          {pedidos.length === 0 && (
+            <p className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+              Sin pedidos
+            </p>
+          )}
+        </div>
+      </SortableContext>
+    </div>
+  );
+}
+
+// ── Tarjeta de pedido (draggable) ──
+function TarjetaPedido({
+  pd,
+  onCambiarEstado,
+  onSetDomicilio,
+  overlay = false,
+}: {
+  pd: PedidoDb;
+  onCambiarEstado: (id: string, estado: string) => void;
+  onSetDomicilio: (id: string, valor: number, pd: PedidoDb) => void;
+  overlay?: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: pd.id,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  const resumen = pd.items
+    ? pd.items
+        .map((i) => `${i.cantidad}x ${i.nombre}`)
+        .join(", ")
+        .slice(0, 60) + (pd.items.length > 1 ? "…" : "")
+    : "Sin items";
+
+  return (
+    <article
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={`cursor-grab rounded-xl border-2 bg-card p-3 shadow-sm transition-shadow hover:shadow-md ${
+        COLOR_ESTADO[pd.estado] ?? "border-border"
+      } ${overlay ? "rotate-2" : ""}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="font-display text-lg text-primary">{pd.numero_comanda}</p>
+        <span
+          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${BADGE_ESTADO[pd.estado] ?? "bg-muted text-muted-foreground"}`}
+        >
+          {ESTADO_LABEL[pd.estado as EstadoPedido] ?? pd.estado}
+        </span>
+      </div>
+
+      <p className="mt-1 text-sm font-semibold">{pd.cliente_nombre}</p>
+      <p className="text-xs text-muted-foreground">{pd.cliente_telefono}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{pd.direccion_entrega}</p>
+      {pd.barrio && <p className="text-xs text-primary">Barrio: {pd.barrio}</p>}
+
+      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{resumen}</p>
+
+      <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
+        <span className="font-display text-xl text-primary">{formatCOP(pd.total)}</span>
+        <div className="flex items-center gap-1">
+          {pd.estado === "pendiente_pago" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void onCambiarEstado(pd.id, "pago_confirmado");
+              }}
+              className="rounded-lg bg-brasa px-2 py-1 text-[10px] font-bold text-primary-foreground"
+            >
+              Confirmar pago
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              void descargarFacturaPdf(pd as never);
+            }}
+            className="flex items-center gap-1 rounded-lg border border-primary/40 bg-primary/10 px-2 py-1 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/20"
+            title="Imprimir factura"
+          >
+            <Printer className="size-3" />
+            Imprimir
+          </button>
+        </div>
+      </div>
+
+      {pd.estado === "pendiente_pago" && (
+        <div className="mt-2 flex items-center gap-2 border-t border-border pt-2">
+          <label className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            Domicilio
+            <input
+              type="number"
+              defaultValue={pd.valor_domicilio}
+              onBlur={(e) => onSetDomicilio(pd.id, Number(e.target.value) || 0, pd)}
+              onClick={(e) => e.stopPropagation()}
+              className="w-20 rounded-lg bg-input p-1 text-xs outline-none"
+            />
+          </label>
+        </div>
+      )}
+    </article>
   );
 }
