@@ -48,6 +48,10 @@ export const Route = createFileRoute("/superadmin")({
     const href = location?.href ?? location?.pathname ?? "";
     if (href.split("?")[0]!.split("#")[0]!.endsWith("/login")) return;
 
+    // En SSR (servidor) no existe localStorage y no se puede restaurar la
+    // sesión de Supabase. Dejar pasar y verificar en el cliente al montar.
+    if (typeof window === "undefined") return;
+
     const ok = await estaAutenticado("dueno");
     if (!ok) {
       throw redirect({ to: "/superadmin/login" });

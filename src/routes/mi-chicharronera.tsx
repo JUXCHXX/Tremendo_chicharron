@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { getClienteLocal, normalizarTelefono } from "@/lib/clientes";
-import { usePedidosRealtime, type PedidoDb } from "@/lib/use-pedidos";
+import { usePedidosRealtime, type PedidoDb, type PedidoItemNormalizado } from "@/lib/use-pedidos";
 import { linkPago } from "@/lib/documentos";
 import { ESTADOS_FLUJO, ESTADO_LABEL } from "@/lib/store";
 import { cargarValoraciones, crearValoracion, type ValoracionDb } from "@/lib/valoraciones";
@@ -93,7 +93,7 @@ function MiChicharronera() {
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
           Aquí puedes seguir tus pedidos en tiempo real, ver el estado de tu comanda, pagar cuando
-          esté pendiente y calificar los platos que ya te entregaron. Si tienes dudas, escríbenos
+          esté pendiente y calificar cada plato que ya te entregaron. Si tienes dudas, escríbenos
           por WhatsApp.
         </p>
       </div>
@@ -136,7 +136,6 @@ function PedidoCard({ pedido: p, telefono }: { pedido: PedidoDb; telefono: strin
   const idxActual = ESTADOS_FLUJO.indexOf(p.estado as (typeof ESTADOS_FLUJO)[number]);
   const entregado = p.estado === "entregado";
   const [valoraciones, setValoraciones] = useState<ValoracionDb[]>([]);
-  const [calificando, setCalificando] = useState(false);
 
   // Cargar valoraciones existentes de este pedido
   useEffect(() => {
@@ -154,8 +153,7 @@ function PedidoCard({ pedido: p, telefono }: { pedido: PedidoDb; telefono: strin
     };
   }, [entregado, p.id, p.items]);
 
-  const valorado = (item: { producto_id: string | null }) =>
-    item.producto_id ? valoraciones.some((v) => v.producto_id === item.producto_id) : false;
+  const itemsCalificables = (p.items ?? []).filter((i) => i.producto_id);
 
   return (
     <article className="rounded-2xl border border-border bg-card p-4 shadow-card">
@@ -194,7 +192,7 @@ function PedidoCard({ pedido: p, telefono }: { pedido: PedidoDb; telefono: strin
         <span className="text-primary">{formatCOP(p.total)}</span>
       </div>
 
-      {p.estado === "pendiente_pago" && (
+      {(p.estado === "pendiente_confirmacion_cajera" || p.estado === "pendiente_pago") && (
         <a
           href={linkPago(p as never)}
           target="_blank"
@@ -205,75 +203,60 @@ function PedidoCard({ pedido: p, telefono }: { pedido: PedidoDb; telefono: strin
         </a>
       )}
 
-      {/* Califica tu plato — solo cuando el pedido fue entregado */}
-      {entregado && p.items && p.items.length > 0 && (
+      {/* Califica tu pedido — solo cuando el pedido fue entregado. Cada plato se califica por separado. */}
+      {entregado && itemsCalificables.length > 0 && (
         <div className="mt-4 border-t border-border pt-4">
-          <p className="mb-2 flex items-center gap-1.5 text-xs tracking-widest text-muted-foreground uppercase">
-            <Star className="size-3.5 text-primary" /> Califica tu plato
+          <p className="mb-3 flex items-center gap-1.5 text-xs tracking-widest text-muted-foreground uppercase">
+            <Star className="size-3.5 text-primary" /> Califica tu pedido
           </p>
-          <div className="space-y-2">
-            {p.items
-              .filter((i) => i.producto_id)
-              .map((item) => (
+          <div className="space-y-3">
+            {itemsCalificables.map((item) =>
+              valoraciones.some((v) => v.producto_id === item.producto_id) ? (
                 <div
                   key={item.key}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-border bg-muted/20 px-3 py-2"
+                  className="flex items-center justify-between gap-2 rounded-xl border border-border bg-muted/20 px-3 py-2.5"
                 >
                   <span className="min-w-0 truncate text-sm">
                     {item.cantidad}x {item.nombre}
                   </span>
-                  {valorado(item) ? (
-                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                      ✓ Calificado
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => setCalificando(true)}
-                      className="shrink-0 rounded-full bg-brasa px-3 py-1 text-xs font-bold text-primary-foreground"
-                    >
-                      Calificar
-                    </button>
-                  )}
+                  <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                    ✓ Calificado
+                  </span>
                 </div>
-              ))}
+              ) : (
+                <CalificarPlatoItem
+                  key={item.key}
+                  pedido={p}
+                  item={item}
+                  telefono={telefono}
+                  onValorado={(v) => setValoraciones((prev) => [...prev, v])}
+                />
+              ),
+            )}
           </div>
-
-          {calificando && (
-            <CalificarPlato
-              pedido={p}
-              telefono={telefono}
-              onCerrar={() => setCalificando(false)}
-              onValorado={(v) => setValoraciones((prev) => [...prev, v])}
-            />
-          )}
         </div>
       )}
     </article>
   );
 }
 
-function CalificarPlato({
+function CalificarPlatoItem({
   pedido,
+  item,
   telefono,
-  onCerrar,
   onValorado,
 }: {
   pedido: PedidoDb;
+  item: PedidoItemNormalizado;
   telefono: string | null;
-  onCerrar: () => void;
   onValorado: (v: ValoracionDb) => void;
 }) {
-  // Items que aún no han sido calificados
-  const itemsConProducto = (pedido.items ?? []).filter((i) => i.producto_id && i.producto_id);
-  const [idx, setIdx] = useState(0);
-  const item = itemsConProducto[idx];
   const [calificacionLocal, setCalificacionLocal] = useState(0);
   const [comentario, setComentario] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
 
-  if (!item || !item.producto_id || pedido.estado !== "entregado") return null;
-
+  if (!item.producto_id || pedido.estado !== "entregado") return null;
   const productoId = item.producto_id;
 
   async function enviar() {
@@ -313,38 +296,17 @@ function CalificarPlato({
       comentario: comentario.trim() || null,
       creado_en: new Date().toISOString(),
     });
-
-    if (idx + 1 < itemsConProducto.length) {
-      setIdx(idx + 1);
-      setCalificacionLocal(0);
-      setComentario("");
-    } else {
-      onCerrar();
-    }
   }
 
   return (
-    <div className="mt-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="font-semibold">{item.nombre}</p>
-          <p className="text-xs text-muted-foreground">
-            {idx + 1} de {itemsConProducto.length} · Pedido {pedido.numero_comanda}
-          </p>
-        </div>
-        <button
-          onClick={onCerrar}
-          aria-label="Cerrar"
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <XCircle className="size-4" />
-        </button>
-      </div>
+    <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
+      <p className="font-semibold">{item.nombre}</p>
+      <p className="text-xs text-muted-foreground">Pedido {pedido.numero_comanda}</p>
 
       <div className="mt-3 flex flex-col items-center gap-1">
         <StarRating
           value={calificacionLocal}
-          tamano={32}
+          tamano={30}
           interactive
           onChange={setCalificacionLocal}
         />
@@ -358,7 +320,7 @@ function CalificarPlato({
       <textarea
         value={comentario}
         onChange={(e) => setComentario(e.target.value)}
-        rows={3}
+        rows={2}
         placeholder="Cuéntanos qué tal estuvo (opcional)…"
         className="mt-3 w-full rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
       />
@@ -371,11 +333,7 @@ function CalificarPlato({
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-brasa py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-50"
       >
         <Send className="size-4" />
-        {enviando
-          ? "Enviando…"
-          : idx + 1 < itemsConProducto.length
-            ? "Guardar y calificar siguiente"
-            : "Enviar valoración"}
+        {enviando ? "Enviando…" : "Enviar valoración"}
       </button>
     </div>
   );

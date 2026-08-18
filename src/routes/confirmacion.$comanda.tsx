@@ -148,7 +148,8 @@ function Confirmacion() {
         )}
       </section>
 
-      {pedido.estado === "pendiente_pago" && (
+      {(pedido.estado === "pendiente_confirmacion_cajera" ||
+        pedido.estado === "pendiente_pago") && (
         <a
           href={linkPago(pedido)}
           target="_blank"
@@ -159,13 +160,6 @@ function Confirmacion() {
         </a>
       )}
 
-      <Link
-        to="/pedido/$numero_comanda"
-        params={{ numero_comanda: pedido.numero_comanda }}
-        className="mt-6 block rounded-2xl bg-brasa py-4 text-center font-display text-2xl text-primary-foreground shadow-glow"
-      >
-        Ver estado de mi pedido
-      </Link>
       <p className="mt-2 text-xs text-muted-foreground">
         Guárdate el número de comanda. También puedes consultarlo desde cualquier dispositivo con tu
         número de teléfono.

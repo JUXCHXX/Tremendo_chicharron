@@ -195,7 +195,8 @@ function ConsultarPedido() {
 
 function DetallePedido({ pedido }: { pedido: Pedido }) {
   const idxActual = ESTADOS_FLUJO.indexOf(pedido.estado);
-  const puedePagar = pedido.estado === "pendiente_pago";
+  const puedePagar =
+    pedido.estado === "pendiente_confirmacion_cajera" || pedido.estado === "pendiente_pago";
 
   return (
     <>

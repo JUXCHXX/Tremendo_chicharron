@@ -2,11 +2,21 @@
  * Autenticación de staff usando Supabase Auth.
  * Verifica el rol del usuario autenticado en la tabla `usuarios`
  * (vinculada a auth.users por user_id).
+ *
+ * IMPORTANTE (SSR): en el servidor no existe `localStorage`, por lo que
+ * `supabase.auth.getUser()` no puede restaurar la sesión y devolvería null.
+ * Para evitar redirigir al login al refrescar (F5), el guard `beforeLoad`
+ * DEBE devolver `true` en SSR (dejar pasar) y verificar en el cliente vía
+ * `verificarSesionCliente()` que sí tiene acceso a localStorage y puede
+ * restaurar la sesión de Supabase Auth.
  */
 import { supabase } from "./supabase";
 
 export type PanelStaff = "caja" | "dueno";
 export type RolUsuario = "admin" | "superadmin";
+
+/** Detección de entorno SSR (TanStack Start / Nitro). */
+const esServer = () => typeof window === "undefined";
 
 /**
  * Verifica si el usuario tiene un rol específico usando la función SQL
@@ -36,16 +46,48 @@ export async function obtenerRolUsuario(userId: string): Promise<RolUsuario | nu
   return data.rol as RolUsuario;
 }
 
+/**
+ * Verifica la sesión del staff en el cliente.
+ * - SSR (servidor): devuelve `true` para no redirigir durante el render
+ *   del servidor; el guard del cliente (`clienteYaAutenticado`) se encarga
+ *   de la verificación real.
+ * - Cliente: espera a que Supabase restaure la sesión desde localStorage
+ *   (persistSession) antes de validar el rol.
+ */
 export async function estaAutenticado(panel: PanelStaff): Promise<boolean> {
+  if (esServer()) return true; // SSR: dejar pasar, el cliente verifica
   if (!supabase) return false;
-  // Usamos getUser() en lugar de getSession(): getUser() espera a que Supabase
-  // restaure la sesión desde localStorage (persistSession) antes de resolver.
-  // getSession() puede devolver null si se llama antes de que la sesión se
-  // haya inicializado, expulsando al usuario por error al refrescar.
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) return false;
-  const rol = panel === "caja" ? "admin" : "superadmin";
-  return tieneRol(data.user.id, rol);
+
+  try {
+    // getUser() espera a que Supabase restaure la sesión desde localStorage
+    // (persistSession: true en supabase.ts). A diferencia de getSession(),
+    // getUser() hace un round-trip y refresca el token si es necesario.
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) return false;
+
+    const rol = panel === "caja" ? "admin" : "superadmin";
+    // Si el rol ya está cacheado en sessionStorage lo reutilizamos
+    // para evitar un round-trip innecesario en cada refresh.
+    try {
+      const cacheKey = `tc-sesion-${panel}`;
+      const cache = sessionStorage.getItem(cacheKey);
+      if (cache === data.user.id) return true;
+    } catch {
+      /* sessionStorage no disponible */
+    }
+
+    const tieneElRol = await tieneRol(data.user.id, rol);
+    if (tieneElRol) {
+      try {
+        sessionStorage.setItem(`tc-sesion-${panel}`, data.user.id);
+      } catch {
+        /* sessionStorage no disponible */
+      }
+    }
+    return tieneElRol;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -58,6 +100,8 @@ export async function iniciarSesion(
   rolEsperado?: RolUsuario,
 ): Promise<{ ok: boolean; error?: string; rol?: RolUsuario }> {
   if (!supabase) return { ok: false, error: "Supabase no está configurado." };
+  if (esServer()) return { ok: false, error: "No se puede iniciar sesión desde el servidor." };
+
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data.user) {
     return { ok: false, error: error?.message ?? "Credenciales incorrectas." };
@@ -81,9 +125,26 @@ export async function iniciarSesion(
       };
     }
   }
+  // Cachear la sesión en sessionStorage para agilizar los refrescos
+  try {
+    const cacheKey = `tc-sesion-${rolEsperado === "admin" ? "caja" : "dueno"}`;
+    sessionStorage.setItem(cacheKey, data.user.id);
+  } catch {
+    /* sessionStorage no disponible */
+  }
   return { ok: true, rol };
 }
 
 export async function cerrarSesion() {
-  if (supabase) await supabase.auth.signOut();
+  // Limpiar la caché de sessionStorage al cerrar sesión
+  try {
+    sessionStorage.removeItem("tc-sesion-caja");
+    sessionStorage.removeItem("tc-sesion-dueno");
+  } catch {
+    /* sessionStorage no disponible */
+  }
+  if (supabase) {
+    if (esServer()) return;
+    await supabase.auth.signOut();
+  }
 }

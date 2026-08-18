@@ -18,6 +18,7 @@ export type EstadoPedido =
   | "cancelado";
 
 export const ESTADOS_FLUJO: EstadoPedido[] = [
+  "pendiente_confirmacion_cajera",
   "pendiente_pago",
   "pago_confirmado",
   "en_cocina",
@@ -240,7 +241,7 @@ export async function crearPedido(data: {
     valor_domicilio: valorDomicilio,
     subtotal,
     total,
-    estado: "pendiente_pago",
+    estado: "pendiente_confirmacion_cajera",
     creado_en: creado.toISOString(),
     editable_hasta: new Date(creado.getTime() + 10 * 60000).toISOString(),
     version: 1,

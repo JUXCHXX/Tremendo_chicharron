@@ -41,6 +41,10 @@ export const Route = createFileRoute("/admin")({
     const href = location?.href ?? location?.pathname ?? "";
     if (href.split("?")[0]!.split("#")[0]!.endsWith("/login")) return;
 
+    // En SSR (servidor) no existe localStorage y no se puede restaurar la
+    // sesión de Supabase. Dejar pasar y verificar en el cliente al montar.
+    if (typeof window === "undefined") return;
+
     const ok = await estaAutenticado("caja");
     if (!ok) {
       throw redirect({ to: "/admin/login" });
@@ -63,8 +67,12 @@ export const Route = createFileRoute("/admin")({
   component: Admin,
 });
 
-// Columnas del kanban (estados del flujo principal)
+// Columnas del kanban (estados del flujo principal).
+// `pendiente_confirmacion_cajera` se incluye para que la cajera vea los
+// pedidos nuevos INMEDIATAMENTE al generarse la comanda, sin depender de
+// que el cliente pague por WhatsApp.
 const COLUMNAS: EstadoPedido[] = [
+  "pendiente_confirmacion_cajera",
   "pendiente_pago",
   "pago_confirmado",
   "en_cocina",
@@ -75,6 +83,7 @@ const COLUMNAS: EstadoPedido[] = [
 
 // Colores distintivos por estado (paleta de marca negro/amarillo)
 const COLOR_ESTADO: Record<string, string> = {
+  pendiente_confirmacion_cajera: "border-purple-400 bg-purple-50",
   pendiente_pago: "border-amber-400 bg-amber-50",
   pago_confirmado: "border-yellow-500 bg-yellow-50",
   en_cocina: "border-orange-500 bg-orange-50",
@@ -84,6 +93,7 @@ const COLOR_ESTADO: Record<string, string> = {
 };
 
 const BADGE_ESTADO: Record<string, string> = {
+  pendiente_confirmacion_cajera: "bg-purple-100 text-purple-800",
   pendiente_pago: "bg-amber-100 text-amber-800",
   pago_confirmado: "bg-yellow-100 text-yellow-800",
   en_cocina: "bg-orange-100 text-orange-800",
@@ -148,9 +158,7 @@ function Admin() {
     }
   };
 
-  const pedidosDelDia = pedidos.filter(
-    (p) => p.estado !== "cancelado" && p.estado !== "pendiente_confirmacion_cajera",
-  );
+  const pedidosDelDia = pedidos.filter((p) => p.estado !== "cancelado");
   const historial = pedidos.filter((p) => p.estado === "cancelado" || p.estado === "entregado");
 
   const resumenPedido = (pd: PedidoDb) => {
@@ -457,6 +465,17 @@ function TarjetaPedido({
       <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
         <span className="font-display text-xl text-primary">{formatCOP(pd.total)}</span>
         <div className="flex items-center gap-1">
+          {pd.estado === "pendiente_confirmacion_cajera" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void onCambiarEstado(pd.id, "pendiente_pago");
+              }}
+              className="rounded-lg bg-brasa px-2 py-1 text-[10px] font-bold text-primary-foreground"
+            >
+              Confirmar pedido
+            </button>
+          )}
           {pd.estado === "pendiente_pago" && (
             <button
               onClick={(e) => {
