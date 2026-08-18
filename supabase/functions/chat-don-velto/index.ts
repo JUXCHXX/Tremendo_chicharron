@@ -17,6 +17,15 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
 const supabase = createClient(SUPABASE_URL ?? "", SUPABASE_SERVICE_ROLE_KEY ?? "");
 
+// ── CORS ─────────────────────────────────────────────────────────────────────
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-cliente-telefono",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Max-Age": "86400",
+};
+
 const VARIANTES_PICADA = [
   { personas: 1, precio: 34000 },
   { personas: 2, precio: 60000 },
@@ -100,16 +109,16 @@ async function verificarRateLimit(identificador: string): Promise<boolean> {
 }
 
 Deno.serve(async (req: Request) => {
-  // CORS
+  // CORS preflight — debe responder ANTES de cualquier otra lógica
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: { "Access-Control-Allow-Origin": "*" } });
+    return new Response("ok", { headers: CORS_HEADERS });
   }
 
   try {
     if (!GROQ_API_KEY) {
       return new Response(
         JSON.stringify({ error: "GROQ_API_KEY no configurada en el servidor." }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
+        { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
       );
     }
 
@@ -118,7 +127,7 @@ Deno.serve(async (req: Request) => {
     if (!mensajes || !Array.isArray(mensajes) || mensajes.length === 0) {
       return new Response(JSON.stringify({ error: "Mensajes requeridos." }), {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
       });
     }
 
@@ -128,7 +137,7 @@ Deno.serve(async (req: Request) => {
     if (!permitido) {
       return new Response(
         JSON.stringify({ error: "Estoy atendiendo muchas mesas, intente en un momentico." }),
-        { status: 429, headers: { "Content-Type": "application/json" } },
+        { status: 429, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
       );
     }
 
@@ -141,7 +150,7 @@ Deno.serve(async (req: Request) => {
         Authorization: `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: "openai/gpt-oss-120b",
         temperature: 0.7,
         messages: [{ role: "system", content: systemPrompt }, ...mensajes],
       }),
@@ -150,24 +159,24 @@ Deno.serve(async (req: Request) => {
     if (res.status === 429) {
       return new Response(
         JSON.stringify({ error: "Estoy atendiendo muchas mesas, intente en un momentico." }),
-        { status: 429, headers: { "Content-Type": "application/json" } },
+        { status: 429, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
       );
     }
     if (!res.ok) {
       return new Response(JSON.stringify({ error: `Groq error: ${res.status}` }), {
         status: 502,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
       });
     }
 
     const data = await res.json();
     return new Response(JSON.stringify(data), {
-      headers: { "Content-Type": "application/json" },
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     });
   } catch (e) {
     return new Response(JSON.stringify({ error: (e as Error).message ?? "Error interno" }), {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     });
   }
 });

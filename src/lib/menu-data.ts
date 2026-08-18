@@ -141,7 +141,10 @@ export const PRODUCTOS: Producto[] = [
     "Tremendo Chicharrón (300g)",
     34000,
     "Arepa, papa salada, plátano maduro, limón, guacamole y barbecue.",
-    { destacado_3d: true, modelo_3d_url: "/desayunos-tremendo-chicharron.glb" },
+    // NOTA: este .glb no existe en /public. Esta capa (menu-data.ts) no se usa
+    // en producción (el runtime usa Supabase vía useMenuData()), así que se
+    // deja sin modelo_3d_url para no apuntar a un archivo inexistente.
+    { destacado_3d: true },
   ),
   p(
     "des-picada",
@@ -173,7 +176,10 @@ export const PRODUCTOS: Producto[] = [
     "Tremenda Paella de Chicharrón",
     34000,
     "Fusión de paella española con chicharrón colombiano y chorizo artesanal, arroz de alta calidad, vegetales, cebolla morada y casco de limón.",
-    { destacado_3d: true, modelo_3d_url: "/almuerzos-paella-chicharron.glb" },
+    // NOTA: este .glb no existe en /public. Esta capa (menu-data.ts) no se usa
+    // en producción (el runtime usa Supabase vía useMenuData()), así que se
+    // deja sin modelo_3d_url para no apuntar a un archivo inexistente.
+    { destacado_3d: true },
   ),
   p(
     "alm-picada",
