@@ -37,6 +37,9 @@ export function guardarClienteLocal(cliente: Cliente) {
 export async function registrarClienteSupabase(cliente: Cliente): Promise<void> {
   if (!supabase) return;
   try {
+    // El upsert por teléfono necesita la política UPDATE público (migración 14).
+    // La tabla `clientes` solo guarda nombre + teléfono (sin datos sensibles),
+    // por lo que es seguro permitir el upsert anónimo sin header.
     await supabase.from("clientes").upsert(
       {
         nombre: cliente.nombre,
