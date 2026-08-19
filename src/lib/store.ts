@@ -227,9 +227,11 @@ export async function crearPedido(data: {
   const valorDomicilio = data.valor_domicilio ?? 0;
   const total = subtotal + valorDomicilio;
   const creado = new Date();
+  const id = crypto.randomUUID();
+
   const pedido: Pedido = {
-    id: crypto.randomUUID(),
-    numero_comanda: nuevoNumeroComanda(),
+    id,
+    numero_comanda: "", // Supabase lo genera con secuencia global (evita colisiones)
     ...data,
     barrio: data.barrio ?? null,
     latitud: data.latitud ?? null,
@@ -246,33 +248,41 @@ export async function crearPedido(data: {
     editable_hasta: new Date(creado.getTime() + 10 * 60000).toISOString(),
     version: 1,
   };
-  // Guardar localmente para compatibilidad con el flujo actual
-  setState((s) => ({ ...s, pedidos: [pedido, ...s.pedidos], cart: [] }));
 
-  // Insertar en Supabase (pedido + items)
+  // Insertar en Supabase (pedido + items) — OBLIGATORIO.
+  // Si falla, se lanza error para que el cliente NO vea una falsa confirmación
+  // y el pedido no quede "fantasma" (solo en localStorage, invisible para Caja/SuperAdmin).
   if (supabase) {
     try {
-      const { error: pedidoError } = await supabase.from("pedidos").insert({
-        id: pedido.id,
-        numero_comanda: pedido.numero_comanda,
-        cliente_nombre: pedido.cliente_nombre,
-        cliente_telefono: pedido.cliente_telefono,
-        direccion_entrega: pedido.direccion_entrega,
-        barrio: pedido.barrio,
-        latitud: pedido.latitud,
-        longitud: pedido.longitud,
-        medio_pago: pedido.medio_pago,
-        monto_efectivo_recibido: pedido.monto_efectivo_recibido,
-        vuelto: pedido.vuelto,
-        valor_domicilio: pedido.valor_domicilio,
-        subtotal: pedido.subtotal,
-        total: pedido.total,
-        estado: pedido.estado,
-        version: pedido.version,
-        creado_en: pedido.creado_en,
-        editable_hasta: pedido.editable_hasta,
-      });
+      const { data: pedidoDb, error: pedidoError } = await supabase
+        .from("pedidos")
+        .insert({
+          id: pedido.id,
+          cliente_nombre: pedido.cliente_nombre,
+          cliente_telefono: pedido.cliente_telefono,
+          direccion_entrega: pedido.direccion_entrega,
+          barrio: pedido.barrio,
+          latitud: pedido.latitud,
+          longitud: pedido.longitud,
+          medio_pago: pedido.medio_pago,
+          monto_efectivo_recibido: pedido.monto_efectivo_recibido,
+          vuelto: pedido.vuelto,
+          valor_domicilio: pedido.valor_domicilio,
+          subtotal: pedido.subtotal,
+          total: pedido.total,
+          estado: pedido.estado,
+          version: pedido.version,
+          creado_en: pedido.creado_en,
+          editable_hasta: pedido.editable_hasta,
+        })
+        // Header requerido por la política RLS pedidos_select_anon para poder
+        // leer el numero_comanda recién generado por la secuencia global.
+        .setHeader("x-cliente-telefono", pedido.cliente_telefono)
+        .select("numero_comanda")
+        .single();
       if (pedidoError) throw pedidoError;
+      if (!pedidoDb) throw new Error("No se pudo obtener el número de comanda.");
+      pedido.numero_comanda = pedidoDb.numero_comanda;
 
       // Insertar items
       const { error: itemsError } = await supabase.from("pedido_items").insert(
@@ -290,8 +300,15 @@ export async function crearPedido(data: {
       if (itemsError) throw itemsError;
     } catch (e) {
       console.error("Error al insertar pedido en Supabase:", e);
+      throw new Error("No se pudo registrar el pedido. Intenta de nuevo.");
     }
+  } else {
+    // Fallback sin Supabase: generar número localmente
+    pedido.numero_comanda = nuevoNumeroComanda();
   }
+
+  // Guardar localmente para compatibilidad con el flujo actual
+  setState((s) => ({ ...s, pedidos: [pedido, ...s.pedidos], cart: [] }));
 
   return pedido;
 }

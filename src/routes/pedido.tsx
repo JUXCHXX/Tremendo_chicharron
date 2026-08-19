@@ -171,19 +171,25 @@ function Checkout() {
     const telefonoNormalizado = normalizarTelefono(telefono);
     await guardarCliente({ nombre: nombre.trim(), telefono: telefonoNormalizado });
 
-    const pedido = await crearPedido({
-      cliente_nombre: nombre.trim(),
-      cliente_telefono: telefonoNormalizado,
-      direccion_entrega: direccion.trim(),
-      barrio: barrioSel.ubicacion,
-      valor_domicilio: barrioSel.tarifa,
-      medio_pago: medio,
-      monto_efectivo_recibido: medio === "efectivo" ? recibido : null,
-      items: cart,
-      latitud: lat,
-      longitud: lng,
-    });
-    void navigate({ to: "/confirmacion/$comanda", params: { comanda: pedido.numero_comanda } });
+    try {
+      const pedido = await crearPedido({
+        cliente_nombre: nombre.trim(),
+        cliente_telefono: telefonoNormalizado,
+        direccion_entrega: direccion.trim(),
+        barrio: barrioSel.ubicacion,
+        valor_domicilio: barrioSel.tarifa,
+        medio_pago: medio,
+        monto_efectivo_recibido: medio === "efectivo" ? recibido : null,
+        items: cart,
+        latitud: lat,
+        longitud: lng,
+      });
+      void navigate({ to: "/confirmacion/$comanda", params: { comanda: pedido.numero_comanda } });
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "No se pudo registrar el pedido. Intenta de nuevo.",
+      );
+    }
   }
 
   if (cart.length === 0) {
