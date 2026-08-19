@@ -5,7 +5,7 @@ import { ArrowLeft, Search, MessageCircle } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { supabase } from "@/lib/supabase";
 import { linkPago } from "@/lib/documentos";
-import { ESTADOS_FLUJO, ESTADO_LABEL, type Pedido } from "@/lib/store";
+import { ESTADOS_FLUJO, ESTADO_LABEL_CLIENTE, type Pedido } from "@/lib/store";
 
 export const Route = createFileRoute("/pedido/$numero_comanda")({
   head: () => ({
@@ -221,7 +221,7 @@ function DetallePedido({ pedido }: { pedido: Pedido }) {
                   }`}
                 />
                 <span className={i <= idxActual ? "text-foreground" : "text-muted-foreground"}>
-                  {ESTADO_LABEL[e]}
+                  {ESTADO_LABEL_CLIENTE[e]}
                 </span>
               </li>
             ))}

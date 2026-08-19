@@ -4,7 +4,7 @@ import { ArrowLeft, Clock } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import {
   ESTADOS_FLUJO,
-  ESTADO_LABEL,
+  ESTADO_LABEL_CLIENTE,
   editarComanda,
   puedeEditarCliente,
   useStore,
@@ -95,7 +95,7 @@ function DetallePedido({ pedido }: { pedido: Pedido }) {
                   }`}
                 />
                 <span className={i <= idxActual ? "text-foreground" : "text-muted-foreground"}>
-                  {ESTADO_LABEL[e]}
+                  {ESTADO_LABEL_CLIENTE[e]}
                 </span>
               </li>
             ))}

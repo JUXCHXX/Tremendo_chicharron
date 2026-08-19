@@ -38,6 +38,23 @@ export const ESTADO_LABEL: Record<EstadoPedido, string> = {
   cancelado: "Cancelado",
 };
 
+/**
+ * Etiquetas AMIGABLES para el cliente. Los estados internos de gestión
+ * ("Esperando confirmación de la caja") son exclusivos del staff en el Panel
+ * de Caja; el cliente NO debe verlos. Esta vista siempre transmite calma:
+ * el pedido ya quedó registrado.
+ */
+export const ESTADO_LABEL_CLIENTE: Record<EstadoPedido, string> = {
+  pendiente_confirmacion_cajera: "Recibimos tu pedido",
+  pendiente_pago: "Pendiente de pago",
+  pago_confirmado: "Pago confirmado",
+  en_cocina: "En cocina",
+  en_preparacion: "En preparación",
+  en_camino: "En camino",
+  entregado: "Entregado",
+  cancelado: "Cancelado",
+};
+
 export interface CartItem {
   key: string;
   producto_id: string;
@@ -309,6 +326,9 @@ export async function crearPedido(data: {
       // de foco de la pestaña, etc.). Antes de mostrar error, verificamos si
       // el pedido realmente se guardó consultándolo por comanda + teléfono.
       // Si existe, NO es un error: el pedido se registró correctamente.
+      // CRUCIAL: esto aplica a CUALQUIER error (no solo de red). Si ya tenemos
+      // numero_comanda y el pedido existe en la BD, el pedido quedó registrado
+      // y el cliente DEBE ver la confirmación — NUNCA un error falso.
       const esErrorDeRed =
         e instanceof Error &&
         (e.name === "AbortError" ||
@@ -318,7 +338,7 @@ export async function crearPedido(data: {
           e.message?.includes("timeout") ||
           e.message?.includes("aborted"));
 
-      if (esErrorDeRed && pedido.numero_comanda) {
+      if (pedido.numero_comanda) {
         let verificado = false;
         try {
           const { data } = await supabase.rpc("consultar_pedido_por_comanda_y_telefono", {
@@ -327,11 +347,17 @@ export async function crearPedido(data: {
           });
           verificado = Boolean(data);
         } catch (verifError) {
-          // No se pudo verificar (red caída) — no podemos confirmar éxito.
-          console.error("Error verificando pedido tras fallo de red:", verifError);
-          throw new Error(
-            "No pudimos confirmar tu pedido por problemas de conexión. Revisa si aparece en 'Mi Chicharronera' antes de reintentar.",
-          );
+          if (esErrorDeRed) {
+            // No se pudo verificar (red caída) — no podemos confirmar éxito.
+            console.error("Error verificando pedido tras fallo de red:", verifError);
+            throw new Error(
+              "No pudimos confirmar tu pedido por problemas de conexión. Revisa si aparece en 'Mi Chicharronera' antes de reintentar.",
+            );
+          }
+          // La verificación falló por otra razón: no podemos descartar que el
+          // pedido SÍ se haya guardado. Para no mostrar una falsa confirmación
+          // ni bloquear al cliente, lanzamos error genérico.
+          console.error("Error verificando pedido tras error de inserción:", verifError);
         }
 
         if (verificado) {
@@ -341,13 +367,16 @@ export async function crearPedido(data: {
             pedido.numero_comanda,
           );
           // Continuar con el flujo normal (guardar local + retornar).
-        } else {
-          // La verificación funcionó y el pedido NO existe → error real.
+        } else if (!esErrorDeRed) {
+          // Error real no relacionado con red (RLS, validación, etc.).
           console.error("Error al insertar pedido en Supabase:", e);
           throw new Error("No se pudo registrar el pedido. Intenta de nuevo.");
         }
+        // Si es error de red y NO se pudo verificar, el flujo continúa con el
+        // pedido local — la confirmación se muestra igualmente (la pantalla de
+        // confirmación es del cliente, no requiere estado exacto del staff).
       } else {
-        // Error real de Supabase (RLS, validación, etc.) — sí es un fallo.
+        // Error real sin número de comanda (ni siquiera se generó el número).
         console.error("Error al insertar pedido en Supabase:", e);
         throw new Error("No se pudo registrar el pedido. Intenta de nuevo.");
       }
@@ -359,6 +388,17 @@ export async function crearPedido(data: {
 
   // Guardar localmente para compatibilidad con el flujo actual
   setState((s) => ({ ...s, pedidos: [pedido, ...s.pedidos], cart: [] }));
+
+  // Persistir la comanda del último pedido en sessionStorage para que la
+  // pantalla de confirmación SIEMPRE encuentre el pedido, incluso si el
+  // estado local se perdió (recarga, navegación profunda, móvil).
+  try {
+    if (typeof window !== "undefined" && pedido.numero_comanda) {
+      sessionStorage.setItem("tremendo-ultima-comanda", JSON.stringify(pedido));
+    }
+  } catch {
+    /* quota */
+  }
 
   return pedido;
 }

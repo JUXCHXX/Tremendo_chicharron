@@ -1,10 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { CheckCircle2, MessageCircle } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
-import { useStore } from "@/lib/store";
+import { useStore, type Pedido } from "@/lib/store";
+import { supabase } from "@/lib/supabase";
 import { Model3DPlaceholder } from "@/components/Model3DPlaceholder";
 import { linkPago } from "@/lib/documentos";
+import { getClienteLocal, normalizarTelefono } from "@/lib/clientes";
 
 export const Route = createFileRoute("/confirmacion/$comanda")({
   head: () => ({
@@ -23,14 +25,121 @@ export const Route = createFileRoute("/confirmacion/$comanda")({
   component: Confirmacion,
 });
 
+/**
+ * Lee la comanda persistida en sessionStorage por crearPedido().
+ * Es la red de seguridad principal: si el estado local (useStore) no tiene
+ * el pedido (recarga, navegación profunda, celular), la pantalla de
+ * confirmación SIEMPRE encuentra la comanda recién creada.
+ */
+function comandaEnSessionStorage(comanda: string): Pedido | null {
+  try {
+    const raw = sessionStorage.getItem("tremendo-ultima-comanda");
+    if (!raw) return null;
+    const pd = JSON.parse(raw) as Pedido;
+    if (pd.numero_comanda !== comanda) return null;
+    return pd;
+  } catch {
+    return null;
+  }
+}
+
+/** Consulta pública segura vía RPC (comanda + teléfono). */
+async function consultarComanda(comanda: string, telefono: string): Promise<Pedido | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.rpc("consultar_pedido_por_comanda_y_telefono", {
+      p_numero_comanda: comanda,
+      p_telefono: telefono,
+    });
+    if (error || !data) return null;
+    const pedidoRaw = (data as { pedido: Record<string, unknown> }).pedido;
+    const itemsRaw = (data as { items: Record<string, unknown>[] }).items ?? [];
+    const p = pedidoRaw as Record<string, unknown>;
+    const pedido: Pedido = {
+      id: String(p["id"]),
+      numero_comanda: String(p["numero_comanda"]),
+      cliente_nombre: String(p["cliente_nombre"]),
+      cliente_telefono: String(p["cliente_telefono"]),
+      direccion_entrega: String(p["direccion_entrega"]),
+      barrio: p["barrio"] != null ? String(p["barrio"]) : null,
+      latitud: p["latitud"] != null ? Number(p["latitud"]) : null,
+      longitud: p["longitud"] != null ? Number(p["longitud"]) : null,
+      medio_pago: p["medio_pago"] as Pedido["medio_pago"],
+      monto_efectivo_recibido:
+        p["monto_efectivo_recibido"] != null ? Number(p["monto_efectivo_recibido"]) : null,
+      vuelto: p["vuelto"] != null ? Number(p["vuelto"]) : null,
+      valor_domicilio: Number(p["valor_domicilio"] ?? 0),
+      subtotal: Number(p["subtotal"] ?? 0),
+      total: Number(p["total"] ?? 0),
+      estado: p["estado"] as Pedido["estado"],
+      creado_en: String(p["creado_en"]),
+      editable_hasta: String(p["editable_hasta"]),
+      version: Number(p["version"] ?? 1),
+      items: (itemsRaw ?? []).map((i: Record<string, unknown>) => ({
+        key: String(i["id"]),
+        producto_id: i["producto_id"] ? String(i["producto_id"]) : "",
+        nombre: String(i["nombre_producto"]),
+        cantidad: Number(i["cantidad"] ?? 0),
+        variante_personas: i["variante_personas"] != null ? Number(i["variante_personas"]) : null,
+        notas: String(i["notas"] ?? ""),
+        precio_unitario: Number(i["precio_unitario"] ?? 0),
+        combo: Boolean(i["combo"]),
+      })),
+    };
+    return pedido;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Vista del CLIENTE (pantalla de celebración):
+ *  - SIEMPRE muestra "¡Pedido registrado en la plataforma!" + número de comanda + confeti.
+ *  - El estado interno del pedido (pendiente_confirmacion_cajera, etc.) NUNCA se
+ *    muestra aquí. Solo se usa para decidir si mostrar el botón "Ir a Pagar".
+ *  - Si el pedido no está en el store local, se busca en sessionStorage y luego
+ *    en la BD (comanda + teléfono del cliente guardado).
+ */
 function Confirmacion() {
   const { comanda } = Route.useParams();
-  const pedido = useStore((s) => s.pedidos.find((p) => p.numero_comanda === comanda) ?? null);
+  const pedidoStore = useStore((s) => s.pedidos.find((p) => p.numero_comanda === comanda) ?? null);
+  const [pedidoExtra, setPedidoExtra] = useState<Pedido | null>(null);
+  const [cargando, setCargando] = useState(true);
 
-  // Confeti de celebración al cargar la pantalla
+  // Sincroniza: primero sessionStorage, luego BD.
   useEffect(() => {
     let activo = true;
-    let limpiar: (() => void) | undefined;
+
+    async function buscar() {
+      const deSession = comandaEnSessionStorage(comanda);
+      if (deSession) {
+        if (activo) setPedidoExtra(deSession);
+        return;
+      }
+
+      const cliente = getClienteLocal();
+      const telefono = cliente ? normalizarTelefono(cliente.telefono) : "";
+      if (telefono) {
+        const deDb = await consultarComanda(comanda, telefono);
+        if (activo) setPedidoExtra(deDb);
+      }
+    }
+
+    void buscar().finally(() => {
+      if (activo) setCargando(false);
+    });
+
+    return () => {
+      activo = false;
+    };
+  }, [comanda]);
+
+  const pedido = pedidoStore ?? pedidoExtra;
+
+  // Confeti de celebración al cargar la pantalla — SIEMPRE, incluso si aún
+  // estamos buscando el pedido en la BD. La confirmación es del cliente.
+  useEffect(() => {
+    let activo = true;
 
     // Import dinámico para no bloquear el bundle inicial ni la carga de los modelos 3D
     import("canvas-confetti").then((mod) => {
@@ -84,23 +193,65 @@ function Confirmacion() {
 
     return () => {
       activo = false;
-      limpiar?.();
     };
   }, []);
 
+  // La pantalla de confirmación del cliente NUNCA debe ser un callejón sin
+  // salida: incluso si el pedido no está disponible en ninguna fuente, el
+  // cliente ve la confirmación con su número de comanda (que sí está en la URL).
   if (!pedido) {
+    if (cargando) {
+      return (
+        <main className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center gap-4 px-4 py-10 text-center">
+          <CheckCircle2 className="mx-auto size-14 animate-pulse text-primary" />
+          <h1 className="mt-4 font-display text-4xl text-gradient-brasa">
+            ¡Pedido registrado en la plataforma!
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Tu número de comanda es
+            <span className="ml-1 font-display text-2xl text-primary">{comanda}</span>
+          </p>
+          <p className="text-xs text-muted-foreground">Cargando detalles…</p>
+        </main>
+      );
+    }
+
+    // Sin datos: aún mostramos la confirmación (comanda de la URL) en lugar de
+    // "No encontramos esa comanda" — la info de gestión NO es bloqueante aquí.
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
-        <h1 className="font-display text-3xl text-primary">No encontramos esa comanda</h1>
-        <Link
-          to="/menu"
-          className="rounded-2xl bg-brasa px-6 py-3 font-display text-xl text-primary-foreground"
-        >
-          Volver al menú
-        </Link>
+      <main className="mx-auto min-h-screen max-w-lg px-4 py-10 text-center">
+        <CheckCircle2 className="mx-auto size-14 text-primary" />
+        <h1 className="mt-4 font-display text-4xl text-gradient-brasa">
+          ¡Pedido registrado en la plataforma!
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Tu número de comanda es
+          <span className="ml-1 font-display text-2xl text-primary">{comanda}</span>
+        </p>
+
+        <div className="mt-6 grid grid-cols-2 gap-3">
+          <div className="animate-entrada-modelo">
+            <Model3DPlaceholder src="/Medalla.glb" label="Medalla" size="sm" />
+          </div>
+          <div className="animate-entrada-modelo-delay">
+            <Model3DPlaceholder src="/Corona.glb" label="Corona" size="sm" />
+          </div>
+        </div>
+
+        <p className="mt-6 text-sm text-muted-foreground">
+          Estamos preparando todo. El restaurante te contactará por WhatsApp para confirmar el pago
+          y el domicilio.
+        </p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Guárdate el número de comanda. También puedes consultarlo desde cualquier dispositivo con
+          tu número de teléfono.
+        </p>
       </main>
     );
   }
+
+  const puedePagar =
+    pedido.estado === "pendiente_confirmacion_cajera" || pedido.estado === "pendiente_pago";
 
   return (
     <main className="mx-auto min-h-screen max-w-lg px-4 py-10 text-center">
@@ -148,8 +299,7 @@ function Confirmacion() {
         )}
       </section>
 
-      {(pedido.estado === "pendiente_confirmacion_cajera" ||
-        pedido.estado === "pendiente_pago") && (
+      {puedePagar && (
         <a
           href={linkPago(pedido)}
           target="_blank"

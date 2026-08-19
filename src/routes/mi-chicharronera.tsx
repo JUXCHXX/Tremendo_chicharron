@@ -15,7 +15,7 @@ import { formatCOP } from "@/lib/menu-data";
 import { getClienteLocal, normalizarTelefono } from "@/lib/clientes";
 import { usePedidosRealtime, type PedidoDb, type PedidoItemNormalizado } from "@/lib/use-pedidos";
 import { linkPago } from "@/lib/documentos";
-import { ESTADOS_FLUJO, ESTADO_LABEL } from "@/lib/store";
+import { ESTADOS_FLUJO, ESTADO_LABEL_CLIENTE } from "@/lib/store";
 import { cargarValoraciones, crearValoracion, type ValoracionDb } from "@/lib/valoraciones";
 import { StarRating } from "@/components/StarRating";
 
@@ -166,7 +166,7 @@ function PedidoCard({ pedido: p, telefono }: { pedido: PedidoDb; telefono: strin
         </div>
         <span className="flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
           {ESTADO_ICON[p.estado] ?? <Clock className="size-5" />}
-          {ESTADO_LABEL[p.estado as keyof typeof ESTADO_LABEL] ?? p.estado}
+          {ESTADO_LABEL_CLIENTE[p.estado as keyof typeof ESTADO_LABEL_CLIENTE] ?? p.estado}
         </span>
       </div>
 
@@ -180,7 +180,7 @@ function PedidoCard({ pedido: p, telefono }: { pedido: PedidoDb; telefono: strin
                 }`}
               />
               <span className={i <= idxActual ? "text-foreground" : "text-muted-foreground"}>
-                {ESTADO_LABEL[e]}
+                {ESTADO_LABEL_CLIENTE[e]}
               </span>
             </li>
           ))}
