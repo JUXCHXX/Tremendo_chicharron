@@ -3,10 +3,26 @@ import { createClient } from "@supabase/supabase-js";
 const url = import.meta.env["VITE_SUPABASE_URL"] as string | undefined;
 const anonKey = import.meta.env["VITE_SUPABASE_ANON_KEY"] as string | undefined;
 
+// Timeout generoso (30s) para conexiones móviles lentas (4G/datos).
+// El default de Supabase es 0 (sin timeout), pero en celular con latencia
+// alta o redes inestables, el fetch puede quedarse esperando y el frontend
+// interpreta la demora como error aunque el servidor ya procesó el INSERT.
+const FETCH_TIMEOUT_MS = 30_000;
+
 export const supabase =
   url && anonKey
     ? createClient(url, anonKey, {
         auth: { persistSession: true, autoRefreshToken: true },
+        global: {
+          fetch: (input, init) => {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+            return fetch(input, {
+              ...init,
+              signal: controller.signal,
+            }).finally(() => clearTimeout(timeout));
+          },
+        },
       })
     : null;
 

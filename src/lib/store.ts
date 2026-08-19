@@ -303,8 +303,54 @@ export async function crearPedido(data: {
       );
       if (itemsError) throw itemsError;
     } catch (e) {
-      console.error("Error al insertar pedido en Supabase:", e);
-      throw new Error("No se pudo registrar el pedido. Intenta de nuevo.");
+      // ── Manejo de falsos errores en celular ──────────────────────────────
+      // En redes móviles (4G/datos) o Safari/iOS, el INSERT puede completarse
+      // en el servidor pero la respuesta no llegar a tiempo (timeout, pérdida
+      // de foco de la pestaña, etc.). Antes de mostrar error, verificamos si
+      // el pedido realmente se guardó consultándolo por comanda + teléfono.
+      // Si existe, NO es un error: el pedido se registró correctamente.
+      const esErrorDeRed =
+        e instanceof Error &&
+        (e.name === "AbortError" ||
+          e.name === "TypeError" ||
+          e.message?.includes("Failed to fetch") ||
+          e.message?.includes("NetworkError") ||
+          e.message?.includes("timeout") ||
+          e.message?.includes("aborted"));
+
+      if (esErrorDeRed && pedido.numero_comanda) {
+        let verificado = false;
+        try {
+          const { data } = await supabase.rpc("consultar_pedido_por_comanda_y_telefono", {
+            p_numero_comanda: pedido.numero_comanda,
+            p_telefono: pedido.cliente_telefono,
+          });
+          verificado = Boolean(data);
+        } catch (verifError) {
+          // No se pudo verificar (red caída) — no podemos confirmar éxito.
+          console.error("Error verificando pedido tras fallo de red:", verifError);
+          throw new Error(
+            "No pudimos confirmar tu pedido por problemas de conexión. Revisa si aparece en 'Mi Chicharronera' antes de reintentar.",
+          );
+        }
+
+        if (verificado) {
+          // El pedido SÍ se guardó — no es un error real.
+          console.warn(
+            "[crearPedido] El pedido se guardó pero la confirmación no llegó. Continuando como éxito.",
+            pedido.numero_comanda,
+          );
+          // Continuar con el flujo normal (guardar local + retornar).
+        } else {
+          // La verificación funcionó y el pedido NO existe → error real.
+          console.error("Error al insertar pedido en Supabase:", e);
+          throw new Error("No se pudo registrar el pedido. Intenta de nuevo.");
+        }
+      } else {
+        // Error real de Supabase (RLS, validación, etc.) — sí es un fallo.
+        console.error("Error al insertar pedido en Supabase:", e);
+        throw new Error("No se pudo registrar el pedido. Intenta de nuevo.");
+      }
     }
   } else {
     // Fallback sin Supabase: generar número localmente
