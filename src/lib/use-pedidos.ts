@@ -51,6 +51,15 @@ export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: bo
   const [pedidos, setPedidos] = useState<PedidoDb[]>([]);
   const [cargando, setCargando] = useState(true);
 
+  /**
+   * Actualización LOCAL optimista: mueve la tarjeta de columna al instante
+   * sin esperar la respuesta del servidor. El UPDATE a Supabase se dispara
+   * después; si falla, el error se muestra y la próxima recarga corrige.
+   */
+  const actualizarLocal = useCallback((id: string, cambios: Partial<PedidoDb>) => {
+    setPedidos((prev) => prev.map((p) => (p.id === id ? { ...p, ...cambios } : p)));
+  }, []);
+
   const cargar = useCallback(async () => {
     if (!supabase) {
       setCargando(false);
@@ -116,5 +125,5 @@ export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: bo
     };
   }, [cargar]);
 
-  return { pedidos, cargando, recargar: cargar };
+  return { pedidos, cargando, recargar: cargar, actualizarLocal };
 }

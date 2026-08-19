@@ -108,7 +108,7 @@ type Seccion = "pedidos" | "historial" | "config";
 
 function Admin() {
   const navigate = useNavigate();
-  const { pedidos, recargar } = usePedidosRealtime({ staff: true });
+  const { pedidos, recargar, actualizarLocal } = usePedidosRealtime({ staff: true });
   const [seccion, setSeccion] = useState<Seccion>("pedidos");
   const [activoId, setActivoId] = useState<string | null>(null);
   const [activoEstado, setActivoEstado] = useState<EstadoPedido | null>(null);
@@ -135,6 +135,8 @@ function Admin() {
     }
     setCambiandoId(id);
     setErrorAccion("");
+    // Optimista: mueve la tarjeta de columna AL INSTANTE en el estado local.
+    actualizarLocal(id, { estado });
     try {
       const { error: updateError } = await supabase.from("pedidos").update({ estado }).eq("id", id);
       if (updateError) {
