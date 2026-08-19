@@ -47,7 +47,7 @@ export interface PedidoDb {
   items?: PedidoItemNormalizado[];
 }
 
-export function usePedidosRealtime(opts?: { telefono?: string | null }) {
+export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: boolean }) {
   const [pedidos, setPedidos] = useState<PedidoDb[]>([]);
   const [cargando, setCargando] = useState(true);
 
@@ -56,14 +56,24 @@ export function usePedidosRealtime(opts?: { telefono?: string | null }) {
       setCargando(false);
       return;
     }
+    // SEGURIDAD: modo cliente (no staff) exige teléfono.
+    // Sin teléfono, NO consultar nada — evita que la política pedidos_select_staff
+    // (si el usuario tiene sesión de staff en el mismo navegador) devuelva TODOS
+    // los pedidos (fuga de datos).
+    if (!opts?.staff && !opts?.telefono) {
+      setPedidos([]);
+      setCargando(false);
+      return;
+    }
     let query = supabase
       .from("pedidos")
       .select("*, pedido_items(*)")
       .order("creado_en", { ascending: false });
     if (opts?.telefono) {
-      query = query.eq("cliente_telefono", opts.telefono);
-      // Header requerido por la política RLS pedidos_select_anon
-      query = query.setHeader("x-cliente-telefono", opts.telefono);
+      query = query
+        .eq("cliente_telefono", opts.telefono)
+        // Header requerido por la política RLS pedidos_select_anon
+        .setHeader("x-cliente-telefono", opts.telefono);
     }
     const { data, error } = await query;
     if (!error && data) {
@@ -85,7 +95,7 @@ export function usePedidosRealtime(opts?: { telefono?: string | null }) {
       console.error("Error cargando pedidos:", error);
     }
     setCargando(false);
-  }, [opts?.telefono]);
+  }, [opts?.telefono, opts?.staff]);
 
   useEffect(() => {
     void cargar();

@@ -450,7 +450,7 @@ function SuperAdmin() {
 }
 
 function Estadisticas() {
-  const { pedidos } = usePedidosRealtime();
+  const { pedidos } = usePedidosRealtime({ staff: true });
   const validos = pedidos.filter((p) => p.estado !== "cancelado");
   const ventas = validos.reduce((a, p) => a + p.total, 0);
   const top = new Map<string, number>();

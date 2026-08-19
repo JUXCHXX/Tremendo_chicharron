@@ -106,7 +106,7 @@ type Seccion = "pedidos" | "historial" | "config";
 
 function Admin() {
   const navigate = useNavigate();
-  const { pedidos, recargar } = usePedidosRealtime();
+  const { pedidos, recargar } = usePedidosRealtime({ staff: true });
   const [seccion, setSeccion] = useState<Seccion>("pedidos");
   const [activoId, setActivoId] = useState<string | null>(null);
   const [activoEstado, setActivoEstado] = useState<EstadoPedido | null>(null);

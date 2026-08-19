@@ -89,6 +89,7 @@ function Checkout() {
   const [billete, setBillete] = useState("");
   const [error, setError] = useState("");
   const [listaAbierta, setListaAbierta] = useState(false);
+  const [procesando, setProcesando] = useState(false);
   const barrioRef = useRef<HTMLDivElement>(null);
 
   // Precarga los datos del cliente guardados en el mini-login.
@@ -149,6 +150,8 @@ function Checkout() {
   }
 
   async function confirmar() {
+    // Evitar doble clic / reintentos mientras se procesa (previene duplicados)
+    if (procesando) return;
     if (!nombre.trim() || telefono.trim().length < 7) {
       setError("Completa nombre y teléfono.");
       return;
@@ -171,6 +174,8 @@ function Checkout() {
     const telefonoNormalizado = normalizarTelefono(telefono);
     await guardarCliente({ nombre: nombre.trim(), telefono: telefonoNormalizado });
 
+    setProcesando(true);
+    setError("");
     try {
       const pedido = await crearPedido({
         cliente_nombre: nombre.trim(),
@@ -189,6 +194,8 @@ function Checkout() {
       setError(
         e instanceof Error ? e.message : "No se pudo registrar el pedido. Intenta de nuevo.",
       );
+    } finally {
+      setProcesando(false);
     }
   }
 
@@ -428,10 +435,14 @@ function Checkout() {
 
         <button
           onClick={confirmar}
-          disabled={!negocioAbierto}
+          disabled={!negocioAbierto || procesando}
           className="w-full rounded-2xl bg-brasa py-4 font-display text-2xl text-primary-foreground shadow-glow disabled:opacity-40"
         >
-          {negocioAbierto ? "Confirmar pedido" : "Cerrado por ahora"}
+          {procesando
+            ? "Registrando pedido…"
+            : negocioAbierto
+              ? "Confirmar pedido"
+              : "Cerrado por ahora"}
         </button>
       </section>
 
