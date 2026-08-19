@@ -16,6 +16,8 @@ import {
   LogOut,
   Home,
   X,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 import {
   DndContext,
@@ -32,7 +34,7 @@ import { estaAutenticado, cerrarSesion } from "@/lib/auth-staff";
 import { formatCOP } from "@/lib/menu-data";
 import { supabase } from "@/lib/supabase";
 import { usePedidosRealtime, type PedidoDb } from "@/lib/use-pedidos";
-import { ESTADOS_FLUJO, ESTADO_LABEL, type EstadoPedido } from "@/lib/store";
+import { ESTADOS_FLUJO, ESTADO_LABEL_STAFF, type EstadoPedido } from "@/lib/store";
 import { imprimirComanda, descargarFacturaPdf } from "@/lib/documentos";
 
 export const Route = createFileRoute("/admin")({
@@ -110,6 +112,8 @@ function Admin() {
   const [seccion, setSeccion] = useState<Seccion>("pedidos");
   const [activoId, setActivoId] = useState<string | null>(null);
   const [activoEstado, setActivoEstado] = useState<EstadoPedido | null>(null);
+  const [cambiandoId, setCambiandoId] = useState<string | null>(null);
+  const [errorAccion, setErrorAccion] = useState("");
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -119,21 +123,88 @@ function Admin() {
     return <Outlet />;
   }
 
-  // Actualizar estado en Supabase
-  const cambiarEstadoDb = async (id: string, estado: string) => {
-    if (!supabase) return;
-    const { error } = await supabase.from("pedidos").update({ estado }).eq("id", id);
-    if (error) console.error("Error actualizando estado:", error);
+  // Actualizar estado en Supabase — RPC segura (SECURITY DEFINER) primero,
+  // luego fallback al UPDATE directo. SIEMPRE se espera, se muestra error
+  // visible si falla (nunca falla silenciosa) y se recargan los pedidos
+  // para que la tarjeta se mueva de columna sin depender solo del Realtime.
+  const cambiarEstadoDb = async (id: string, estado: string): Promise<boolean> => {
+    if (!supabase) {
+      setErrorAccion("No se pudo conectar con la base de datos.");
+      return false;
+    }
+    setCambiandoId(id);
+    setErrorAccion("");
+    try {
+      // 1) RPC segura (evita bloqueo por políticas RLS).
+      const { error: rpcError } = await supabase.rpc("actualizar_estado_pedido_staff", {
+        p_pedido_id: id,
+        p_estado: estado,
+      });
+      if (!rpcError) {
+        void recargar();
+        return true;
+      }
+      // La RPC aún no existe en la BD (migración 16 pendiente) → fallback.
+      console.warn("[caja] RPC actualizar_estado_pedido_staff:", rpcError.message);
+
+      // 2) Fallback: UPDATE directo (política pedidos_update_staff).
+      const { error: updateError } = await supabase.from("pedidos").update({ estado }).eq("id", id);
+      if (updateError) {
+        throw new Error(`No se pudo actualizar el estado (${updateError.message}).`);
+      }
+      void recargar();
+      return true;
+    } catch (e) {
+      console.error("Error actualizando estado:", e);
+      setErrorAccion(
+        e instanceof Error
+          ? e.message
+          : "No se pudo actualizar el pedido. Revisa tu conexión e intenta de nuevo.",
+      );
+      return false;
+    } finally {
+      setCambiandoId(null);
+    }
   };
 
-  // Actualizar domicilio
+  // Actualizar domicilio (misma estrategia: RPC → fallback, feedback visible).
   const setDomicilioDb = async (id: string, valor: number, pd: PedidoDb) => {
-    if (!supabase) return;
-    const { error } = await supabase
-      .from("pedidos")
-      .update({ valor_domicilio: valor, total: pd.subtotal + valor })
-      .eq("id", id);
-    if (error) console.error("Error actualizando domicilio:", error);
+    if (!supabase) {
+      setErrorAccion("No se pudo conectar con la base de datos.");
+      return;
+    }
+    setCambiandoId(id);
+    setErrorAccion("");
+    try {
+      const { error: rpcError } = await supabase.rpc("actualizar_domicilio_pedido_staff", {
+        p_pedido_id: id,
+        p_valor_domicilio: valor,
+        p_total_override: pd.subtotal + valor,
+      });
+      if (!rpcError) {
+        void recargar();
+        return;
+      }
+      console.warn("[caja] RPC actualizar_domicilio_pedido_staff:", rpcError.message);
+
+      const { error: updateError } = await supabase
+        .from("pedidos")
+        .update({ valor_domicilio: valor, total: pd.subtotal + valor })
+        .eq("id", id);
+      if (updateError) {
+        throw new Error(`No se pudo actualizar el domicilio (${updateError.message}).`);
+      }
+      void recargar();
+    } catch (e) {
+      console.error("Error actualizando domicilio:", e);
+      setErrorAccion(
+        e instanceof Error
+          ? e.message
+          : "No se pudo actualizar el domicilio. Revisa tu conexión e intenta de nuevo.",
+      );
+    } finally {
+      setCambiandoId(null);
+    }
   };
 
   const onDragStart = (e: DragStartEvent) => {
@@ -258,6 +329,20 @@ function Admin() {
               </div>
             </header>
 
+            {errorAccion && (
+              <div className="mb-4 flex items-center gap-2 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <AlertCircle className="size-4 shrink-0" />
+                <span className="flex-1">{errorAccion}</span>
+                <button
+                  onClick={() => setErrorAccion("")}
+                  className="shrink-0 rounded-full p-1 hover:bg-destructive/20"
+                  aria-label="Cerrar aviso"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            )}
+
             <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
               <div className="flex gap-4 pb-4">
                 {COLUMNAS.map((estado) => {
@@ -269,6 +354,7 @@ function Admin() {
                       pedidos={enColumna}
                       onCambiarEstado={cambiarEstadoDb}
                       onSetDomicilio={setDomicilioDb}
+                      cambiandoId={cambiandoId}
                     />
                   );
                 })}
@@ -279,6 +365,7 @@ function Admin() {
                     pd={pedidos.find((p) => p.id === activoId)!}
                     onCambiarEstado={cambiarEstadoDb}
                     onSetDomicilio={setDomicilioDb}
+                    cambiandoId={cambiandoId}
                     overlay
                   />
                 ) : null}
@@ -312,7 +399,7 @@ function Admin() {
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-semibold ${BADGE_ESTADO[pd.estado] ?? "bg-muted text-muted-foreground"}`}
                       >
-                        {ESTADO_LABEL[pd.estado as EstadoPedido] ?? pd.estado}
+                        {ESTADO_LABEL_STAFF[pd.estado as EstadoPedido] ?? pd.estado}
                       </span>
                     </div>
                     <div className="mt-3 text-sm">
@@ -366,11 +453,13 @@ function KanbanColumna({
   pedidos,
   onCambiarEstado,
   onSetDomicilio,
+  cambiandoId,
 }: {
   estado: EstadoPedido;
   pedidos: PedidoDb[];
   onCambiarEstado: (id: string, estado: string) => void;
   onSetDomicilio: (id: string, valor: number, pd: PedidoDb) => void;
+  cambiandoId: string | null;
 }) {
   const { setNodeRef, isOver } = useSortable({ id: estado });
   return (
@@ -381,7 +470,7 @@ function KanbanColumna({
       }`}
     >
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-foreground">{ESTADO_LABEL[estado]}</h3>
+        <h3 className="text-sm font-bold text-foreground">{ESTADO_LABEL_STAFF[estado]}</h3>
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
           {pedidos.length}
         </span>
@@ -394,6 +483,7 @@ function KanbanColumna({
               pd={pd}
               onCambiarEstado={onCambiarEstado}
               onSetDomicilio={onSetDomicilio}
+              cambiandoId={cambiandoId}
             />
           ))}
           {pedidos.length === 0 && (
@@ -412,11 +502,13 @@ function TarjetaPedido({
   pd,
   onCambiarEstado,
   onSetDomicilio,
+  cambiandoId,
   overlay = false,
 }: {
   pd: PedidoDb;
   onCambiarEstado: (id: string, estado: string) => void;
   onSetDomicilio: (id: string, valor: number, pd: PedidoDb) => void;
+  cambiandoId: string | null;
   overlay?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -451,7 +543,7 @@ function TarjetaPedido({
         <span
           className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${BADGE_ESTADO[pd.estado] ?? "bg-muted text-muted-foreground"}`}
         >
-          {ESTADO_LABEL[pd.estado as EstadoPedido] ?? pd.estado}
+          {ESTADO_LABEL_STAFF[pd.estado as EstadoPedido] ?? pd.estado}
         </span>
       </div>
 
@@ -465,13 +557,15 @@ function TarjetaPedido({
       <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
         <span className="font-display text-xl text-primary">{formatCOP(pd.total)}</span>
         <div className="flex items-center gap-1">
+          {cambiandoId === pd.id && <Loader2 className="size-3 animate-spin text-primary" />}
           {pd.estado === "pendiente_confirmacion_cajera" && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 void onCambiarEstado(pd.id, "pendiente_pago");
               }}
-              className="rounded-lg bg-brasa px-2 py-1 text-[10px] font-bold text-primary-foreground"
+              disabled={cambiandoId === pd.id}
+              className="rounded-lg bg-brasa px-2 py-1 text-[10px] font-bold text-primary-foreground disabled:opacity-50"
             >
               Confirmar pedido
             </button>

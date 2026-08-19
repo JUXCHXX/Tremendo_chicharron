@@ -39,6 +39,22 @@ export const ESTADO_LABEL: Record<EstadoPedido, string> = {
 };
 
 /**
+ * Etiquetas para el PANEL DE STAFF (Caja). El wording aclara que la acción
+ * le corresponde al propio cajero — no es un permiso externo. La cajera ve
+ * "Nuevo pedido — por confirmar" y sabe que su botón es la acción.
+ */
+export const ESTADO_LABEL_STAFF: Record<EstadoPedido, string> = {
+  pendiente_confirmacion_cajera: "Nuevo pedido — por confirmar",
+  pendiente_pago: "Pendiente de pago",
+  pago_confirmado: "Pago confirmado",
+  en_cocina: "En cocina",
+  en_preparacion: "En preparación",
+  en_camino: "En camino",
+  entregado: "Entregado",
+  cancelado: "Cancelado",
+};
+
+/**
  * Etiquetas AMIGABLES para el cliente. Los estados internos de gestión
  * ("Esperando confirmación de la caja") son exclusivos del staff en el Panel
  * de Caja; el cliente NO debe verlos. Esta vista siempre transmite calma:
