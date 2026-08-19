@@ -123,10 +123,11 @@ function Admin() {
     return <Outlet />;
   }
 
-  // Actualizar estado en Supabase — RPC segura (SECURITY DEFINER) primero,
-  // luego fallback al UPDATE directo. SIEMPRE se espera, se muestra error
-  // visible si falla (nunca falla silenciosa) y se recargan los pedidos
-  // para que la tarjeta se mueva de columna sin depender solo del Realtime.
+  // Actualizar estado en Supabase — UPDATE DIRECTO a la tabla pedidos.
+  // Usa la política RLS existente pedidos_update_staff (migración 02), que fue
+  // el flujo que siempre funcionó en el Kanban. NO se introduce ninguna RPC
+  // ni infraestructura adicional. Se espera la respuesta, se muestra error
+  // visible si falla, y se recargan los pedidos para mover la tarjeta.
   const cambiarEstadoDb = async (id: string, estado: string): Promise<boolean> => {
     if (!supabase) {
       setErrorAccion("No se pudo conectar con la base de datos.");
@@ -135,19 +136,6 @@ function Admin() {
     setCambiandoId(id);
     setErrorAccion("");
     try {
-      // 1) RPC segura (evita bloqueo por políticas RLS).
-      const { error: rpcError } = await supabase.rpc("actualizar_estado_pedido_staff", {
-        p_pedido_id: id,
-        p_estado: estado,
-      });
-      if (!rpcError) {
-        void recargar();
-        return true;
-      }
-      // La RPC aún no existe en la BD (migración 16 pendiente) → fallback.
-      console.warn("[caja] RPC actualizar_estado_pedido_staff:", rpcError.message);
-
-      // 2) Fallback: UPDATE directo (política pedidos_update_staff).
       const { error: updateError } = await supabase.from("pedidos").update({ estado }).eq("id", id);
       if (updateError) {
         throw new Error(`No se pudo actualizar el estado (${updateError.message}).`);
@@ -167,7 +155,7 @@ function Admin() {
     }
   };
 
-  // Actualizar domicilio (misma estrategia: RPC → fallback, feedback visible).
+  // Actualizar domicilio — UPDATE directo (sin RPC).
   const setDomicilioDb = async (id: string, valor: number, pd: PedidoDb) => {
     if (!supabase) {
       setErrorAccion("No se pudo conectar con la base de datos.");
@@ -176,17 +164,6 @@ function Admin() {
     setCambiandoId(id);
     setErrorAccion("");
     try {
-      const { error: rpcError } = await supabase.rpc("actualizar_domicilio_pedido_staff", {
-        p_pedido_id: id,
-        p_valor_domicilio: valor,
-        p_total_override: pd.subtotal + valor,
-      });
-      if (!rpcError) {
-        void recargar();
-        return;
-      }
-      console.warn("[caja] RPC actualizar_domicilio_pedido_staff:", rpcError.message);
-
       const { error: updateError } = await supabase
         .from("pedidos")
         .update({ valor_domicilio: valor, total: pd.subtotal + valor })
@@ -576,7 +553,8 @@ function TarjetaPedido({
                 e.stopPropagation();
                 void onCambiarEstado(pd.id, "pago_confirmado");
               }}
-              className="rounded-lg bg-brasa px-2 py-1 text-[10px] font-bold text-primary-foreground"
+              disabled={cambiandoId === pd.id}
+              className="rounded-lg bg-brasa px-2 py-1 text-[10px] font-bold text-primary-foreground disabled:opacity-50"
             >
               Confirmar pago
             </button>
