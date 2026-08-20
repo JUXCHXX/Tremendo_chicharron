@@ -141,8 +141,16 @@ export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: bo
       })
       .subscribe();
 
+    // Polling de respaldo: en celular/redes inestables Realtime puede no
+    // notificar. Recargamos cada 15s para que el cliente SIEMPRE vea el
+    // estado actualizado de su pedido (Mi Chicharronera).
+    const intervalo = setInterval(() => {
+      void cargar();
+    }, 15_000);
+
     return () => {
       void sb.removeChannel(channel);
+      clearInterval(intervalo);
     };
   }, [cargar]);
 

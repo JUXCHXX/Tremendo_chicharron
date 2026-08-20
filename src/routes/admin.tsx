@@ -114,6 +114,7 @@ function Admin() {
   const [activoEstado, setActivoEstado] = useState<EstadoPedido | null>(null);
   const [cambiandoId, setCambiandoId] = useState<string | null>(null);
   const [errorAccion, setErrorAccion] = useState("");
+  const [busquedaComanda, setBusquedaComanda] = useState("");
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -208,8 +209,25 @@ function Admin() {
     }
   };
 
-  const pedidosDelDia = pedidos.filter((p) => p.estado !== "cancelado");
-  const historial = pedidos.filter((p) => p.estado === "cancelado" || p.estado === "entregado");
+  // Solo pedidos de HOY: el tablero se renueva cada día (los pedidos de días
+  // anteriores no deben aparecer en el kanban del día actual).
+  const inicioDeHoy = new Date();
+  inicioDeHoy.setHours(0, 0, 0, 0);
+  const pedidosDeHoy = pedidos.filter((p) => new Date(p.creado_en) >= inicioDeHoy);
+  const pedidosDelDia = pedidosDeHoy.filter((p) => p.estado !== "cancelado");
+  const historial = pedidosDeHoy.filter(
+    (p) => p.estado === "cancelado" || p.estado === "entregado",
+  );
+
+  // Búsqueda por comanda: si la cajera escribe un número, filtra el kanban
+  // para encontrar el pedido de inmediato (incluso de días anteriores).
+  const busquedaNormalizada = busquedaComanda.trim().toLowerCase();
+  const pedidosKanban = busquedaNormalizada
+    ? pedidos.filter(
+        (p) =>
+          p.numero_comanda.toLowerCase().includes(busquedaNormalizada) && p.estado !== "cancelado",
+      )
+    : pedidosDelDia;
 
   const resumenPedido = (pd: PedidoDb) => {
     if (!pd.items || pd.items.length === 0) return "Sin items";
@@ -306,6 +324,12 @@ function Admin() {
                   Arrastra las tarjetas entre columnas para actualizar el estado
                 </p>
               </div>
+              <input
+                value={busquedaComanda}
+                onChange={(e) => setBusquedaComanda(e.target.value)}
+                placeholder="Buscar comanda (TC-…)"
+                className="w-56 rounded-xl bg-input px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
             </header>
 
             {errorAccion && (
@@ -325,7 +349,7 @@ function Admin() {
             <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
               <div className="flex gap-4 pb-4">
                 {COLUMNAS.map((estado) => {
-                  const enColumna = pedidosDelDia.filter((p) => p.estado === estado);
+                  const enColumna = pedidosKanban.filter((p) => p.estado === estado);
                   return (
                     <KanbanColumna
                       key={estado}
