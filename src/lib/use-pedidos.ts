@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 
 export interface PedidoItemDb {
@@ -51,13 +51,23 @@ export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: bo
   const [pedidos, setPedidos] = useState<PedidoDb[]>([]);
   const [cargando, setCargando] = useState(true);
 
+  // Overrides locales: pedidos cuyo estado la cajera cambió en esta sesión.
+  // Se aplican SIEMPRE por encima de lo que devuelva el servidor, para que la
+  // tarjeta NO "rebote" a la columna anterior si el UPDATE aún no se refleja
+  // o si Realtime llega con un snapshot viejo. Se limpian tras una recarga
+  // que confirme el nuevo estado en el servidor.
+  const overridesRef = useRef(new Map<string, Partial<PedidoDb>>());
+
   /**
-   * Actualización LOCAL optimista: mueve la tarjeta de columna al instante
-   * sin esperar la respuesta del servidor. El UPDATE a Supabase se dispara
-   * después; si falla, el error se muestra y la próxima recarga corrige.
+   * Actualización LOCAL optimista y DURADERA: mueve la tarjeta de columna al
+   * instante y la mantiene ahí aunque el server/Realtime devuelva el estado
+   * anterior. El UPDATE a Supabase se dispara después; una vez que el server
+   * confirme el nuevo estado (recarga posterior), el override se libera.
    */
   const actualizarLocal = useCallback((id: string, cambios: Partial<PedidoDb>) => {
-    setPedidos((prev) => prev.map((p) => (p.id === id ? { ...p, ...cambios } : p)));
+    const prev = overridesRef.current.get(id) ?? {};
+    overridesRef.current.set(id, { ...prev, ...cambios });
+    setPedidos((prevPedidos) => prevPedidos.map((p) => (p.id === id ? { ...p, ...cambios } : p)));
   }, []);
 
   const cargar = useCallback(async () => {
@@ -86,19 +96,30 @@ export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: bo
     }
     const { data, error } = await query;
     if (!error && data) {
-      const conItems = (data as (PedidoDb & { pedido_items: PedidoItemDb[] })[]).map((p) => ({
-        ...p,
-        items: (p.pedido_items ?? []).map((i) => ({
-          key: i.id,
-          producto_id: i.producto_id,
-          nombre: i.nombre_producto,
-          cantidad: i.cantidad,
-          variante_personas: i.variante_personas,
-          combo: i.combo,
-          notas: i.notas,
-          precio_unitario: i.precio_unitario,
-        })),
-      }));
+      const conItems = (data as (PedidoDb & { pedido_items: PedidoItemDb[] })[]).map((p) => {
+        const pedidoNormalizado = {
+          ...p,
+          items: (p.pedido_items ?? []).map((i) => ({
+            key: i.id,
+            producto_id: i.producto_id,
+            nombre: i.nombre_producto,
+            cantidad: i.cantidad,
+            variante_personas: i.variante_personas,
+            combo: i.combo,
+            notas: i.notas,
+            precio_unitario: i.precio_unitario,
+          })),
+        };
+        const override = overridesRef.current.get(p.id);
+        if (override) {
+          if (p.estado === override.estado) {
+            overridesRef.current.delete(p.id);
+          } else {
+            return { ...pedidoNormalizado, ...override };
+          }
+        }
+        return pedidoNormalizado;
+      });
       setPedidos(conItems);
     } else if (error) {
       console.error("Error cargando pedidos:", error);
