@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { CheckCircle2, MessageCircle } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
@@ -309,6 +309,13 @@ function Confirmacion() {
           <MessageCircle className="size-6" /> Ir a Pagar · {formatCOP(pedido.total)}
         </a>
       )}
+
+      <Link
+        to="/mi-chicharronera"
+        className="mt-3 flex items-center justify-center gap-2 rounded-2xl border border-primary/40 bg-primary/10 py-3 font-display text-xl text-primary transition-colors hover:bg-primary/20"
+      >
+        Ir a mi Chicharronera
+      </Link>
 
       <p className="mt-2 text-xs text-muted-foreground">
         Guárdate el número de comanda. También puedes consultarlo desde cualquier dispositivo con tu

@@ -26,8 +26,13 @@ export const Route = createFileRoute("/")({
 });
 
 const BOTONES = [
-  { to: "/menu", label: "Ver Menú", icon: UtensilsCrossed },
-  { to: "/mi-chicharronera", label: "Mi Chicharronera", icon: Truck },
+  { to: "/menu", label: "Ver Menú", icon: UtensilsCrossed, subtitulo: undefined },
+  {
+    to: "/mi-chicharronera",
+    label: "Mi Chicharronera",
+    icon: Truck,
+    subtitulo: "Seguimiento de pedidos",
+  },
 ] as const;
 
 function Home() {
@@ -89,14 +94,21 @@ function Home() {
         )}
 
         <nav className="mt-7 w-full space-y-3">
-          {BOTONES.map(({ to, label, icon: Icon }) => (
+          {BOTONES.map(({ to, label, icon: Icon, subtitulo }) => (
             <Link
               key={label}
               to={to}
               className="flex w-full items-center gap-3 rounded-2xl bg-brasa px-5 py-4 font-display text-2xl text-primary-foreground shadow-glow transition-transform hover:scale-[1.02]"
             >
               <Icon className="size-6" strokeWidth={2.2} />
-              {label}
+              <span className="flex flex-col items-start leading-tight">
+                {label}
+                {subtitulo && (
+                  <span className="text-xs font-normal text-primary-foreground/80">
+                    {subtitulo}
+                  </span>
+                )}
+              </span>
             </Link>
           ))}
           <a

@@ -39,14 +39,9 @@ import { imprimirComanda, descargarFacturaPdf } from "@/lib/documentos";
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async ({ location }) => {
-    // La ruta de login NO se protege — siempre debe mostrar el formulario
     const href = location?.href ?? location?.pathname ?? "";
     if (href.split("?")[0]!.split("#")[0]!.endsWith("/login")) return;
-
-    // En SSR (servidor) no existe localStorage y no se puede restaurar la
-    // sesión de Supabase. Dejar pasar y verificar en el cliente al montar.
     if (typeof window === "undefined") return;
-
     const ok = await estaAutenticado("caja");
     if (!ok) {
       throw redirect({ to: "/admin/login" });
@@ -69,10 +64,6 @@ export const Route = createFileRoute("/admin")({
   component: Admin,
 });
 
-// Columnas del kanban (estados del flujo principal).
-// `pendiente_confirmacion_cajera` se incluye para que la cajera vea los
-// pedidos nuevos INMEDIATAMENTE al generarse la comanda, sin depender de
-// que el cliente pague por WhatsApp.
 const COLUMNAS: EstadoPedido[] = [
   "pendiente_confirmacion_cajera",
   "pendiente_pago",
@@ -83,7 +74,6 @@ const COLUMNAS: EstadoPedido[] = [
   "entregado",
 ];
 
-// Colores distintivos por estado (paleta de marca negro/amarillo)
 const COLOR_ESTADO: Record<string, string> = {
   pendiente_confirmacion_cajera: "border-purple-400 bg-purple-50",
   pendiente_pago: "border-amber-400 bg-amber-50",
@@ -118,17 +108,11 @@ function Admin() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
-  // Si estamos en /admin/login, renderizar la ruta hija (el formulario de login)
   const { pathname } = useLocation();
   if (pathname.endsWith("/login")) {
     return <Outlet />;
   }
 
-  // Actualizar estado en Supabase — UPDATE DIRECTO a la tabla pedidos.
-  // Usa la política RLS existente pedidos_update_staff (migración 02), que fue
-  // el flujo que siempre funcionó en el Kanban. NO se introduce ninguna RPC
-  // ni infraestructura adicional. Se espera la respuesta, se muestra error
-  // visible si falla, y se recargan los pedidos para mover la tarjeta.
   const cambiarEstadoDb = async (id: string, estado: string): Promise<boolean> => {
     if (!supabase) {
       setErrorAccion("No se pudo conectar con la base de datos.");
@@ -136,7 +120,6 @@ function Admin() {
     }
     setCambiandoId(id);
     setErrorAccion("");
-    // Optimista: mueve la tarjeta de columna AL INSTANTE en el estado local.
     actualizarLocal(id, { estado });
     try {
       const { error: updateError } = await supabase.from("pedidos").update({ estado }).eq("id", id);
@@ -158,7 +141,6 @@ function Admin() {
     }
   };
 
-  // Actualizar domicilio — UPDATE directo (sin RPC).
   const setDomicilioDb = async (id: string, valor: number, pd: PedidoDb) => {
     if (!supabase) {
       setErrorAccion("No se pudo conectar con la base de datos.");
@@ -209,8 +191,7 @@ function Admin() {
     }
   };
 
-  // Solo pedidos de HOY: el tablero se renueva cada día (los pedidos de días
-  // anteriores no deben aparecer en el kanban del día actual).
+  // Solo pedidos de HOY: el tablero se renueva cada día.
   const inicioDeHoy = new Date();
   inicioDeHoy.setHours(0, 0, 0, 0);
   const pedidosDeHoy = pedidos.filter((p) => new Date(p.creado_en) >= inicioDeHoy);
@@ -219,8 +200,7 @@ function Admin() {
     (p) => p.estado === "cancelado" || p.estado === "entregado",
   );
 
-  // Búsqueda por comanda: si la cajera escribe un número, filtra el kanban
-  // para encontrar el pedido de inmediato (incluso de días anteriores).
+  // Búsqueda por comanda: filtra el kanban (incluso de días anteriores).
   const busquedaNormalizada = busquedaComanda.trim().toLowerCase();
   const pedidosKanban = busquedaNormalizada
     ? pedidos.filter(
@@ -241,7 +221,6 @@ function Admin() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* ── Sidebar ── */}
       <aside className="flex w-16 flex-col items-center gap-2 border-r border-border bg-card py-4 md:w-56 md:items-stretch md:px-3">
         <div className="mb-4 flex items-center justify-center gap-2 md:justify-start">
           <span className="font-display text-2xl text-primary">TC</span>
@@ -313,7 +292,6 @@ function Admin() {
         </div>
       </aside>
 
-      {/* ── Contenido ── */}
       <main className="flex-1 overflow-x-auto px-4 pb-16">
         {seccion === "pedidos" && (
           <>
@@ -450,7 +428,6 @@ function Admin() {
   );
 }
 
-// ── Columna Kanban ──
 function KanbanColumna({
   estado,
   pedidos,
@@ -500,7 +477,6 @@ function KanbanColumna({
   );
 }
 
-// ── Tarjeta de pedido (draggable) ──
 function TarjetaPedido({
   pd,
   onCambiarEstado,
