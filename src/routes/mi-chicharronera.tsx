@@ -11,6 +11,7 @@ import {
   Star,
   Send,
   Printer,
+  Eye,
 } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { getClienteLocal, normalizarTelefono } from "@/lib/clientes";
@@ -19,6 +20,7 @@ import { linkPago, descargarFactura } from "@/lib/documentos";
 import { ESTADOS_FLUJO, ESTADO_LABEL_CLIENTE } from "@/lib/store";
 import { cargarValoraciones, crearValoracion, type ValoracionDb } from "@/lib/valoraciones";
 import { StarRating } from "@/components/StarRating";
+import { DetallePedidoModal } from "@/components/DetallePedidoModal";
 
 export const Route = createFileRoute("/mi-chicharronera")({
   head: () => ({
@@ -43,12 +45,14 @@ const ESTADO_ICON: Record<string, React.ReactNode> = {
 
 function MiChicharronera() {
   const [telefono, setTelefono] = useState("");
+  const [detalleId, setDetalleId] = useState<string | null>(null);
   const cliente = getClienteLocal();
   useEffect(() => {
     if (cliente) setTelefono(normalizarTelefono(cliente.telefono));
   }, [cliente]);
   const telefonoNormalizado = cliente ? normalizarTelefono(cliente.telefono) : null;
-  const { pedidos, cargando } = usePedidosRealtime({ telefono: telefonoNormalizado });
+  const { pedidos, cargando, recargar } = usePedidosRealtime({ telefono: telefonoNormalizado });
+  const pedidoDetalle = pedidos.find((p) => p.id === detalleId) ?? null;
 
   if (cargando) {
     return (
@@ -112,7 +116,12 @@ function MiChicharronera() {
       ) : (
         <div className="space-y-4">
           {activos.map((p) => (
-            <PedidoCard key={p.id} pedido={p} telefono={telefonoNormalizado} />
+            <PedidoCard
+              key={p.id}
+              pedido={p}
+              telefono={telefonoNormalizado}
+              onVerDetalle={setDetalleId}
+            />
           ))}
 
           {cancelados.length > 0 && (
@@ -122,18 +131,43 @@ function MiChicharronera() {
               </p>
               <div className="space-y-4 opacity-60">
                 {cancelados.map((p) => (
-                  <PedidoCard key={p.id} pedido={p} telefono={telefonoNormalizado} />
+                  <PedidoCard
+                    key={p.id}
+                    pedido={p}
+                    telefono={telefonoNormalizado}
+                    onVerDetalle={setDetalleId}
+                  />
                 ))}
               </div>
             </div>
           )}
         </div>
       )}
+
+      <DetallePedidoModal
+        pedido={pedidoDetalle}
+        abierto={detalleId !== null}
+        onCerrar={() => setDetalleId(null)}
+        staff={false}
+        telefonoCliente={telefonoNormalizado}
+        onGuardado={() => {
+          setDetalleId(null);
+          void recargar();
+        }}
+      />
     </main>
   );
 }
 
-function PedidoCard({ pedido: p, telefono }: { pedido: PedidoDb; telefono: string | null }) {
+function PedidoCard({
+  pedido: p,
+  telefono,
+  onVerDetalle,
+}: {
+  pedido: PedidoDb;
+  telefono: string | null;
+  onVerDetalle: (id: string) => void;
+}) {
   const idxActual = ESTADOS_FLUJO.indexOf(p.estado as (typeof ESTADOS_FLUJO)[number]);
   const entregado = p.estado === "entregado";
   const [valoraciones, setValoraciones] = useState<ValoracionDb[]>([]);
@@ -165,10 +199,18 @@ function PedidoCard({ pedido: p, telefono }: { pedido: PedidoDb; telefono: strin
             {new Date(p.creado_en).toLocaleString("es-CO")}
           </p>
         </div>
-        <span className="flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-          {ESTADO_ICON[p.estado] ?? <Clock className="size-5" />}
-          {ESTADO_LABEL_CLIENTE[p.estado as keyof typeof ESTADO_LABEL_CLIENTE] ?? p.estado}
-        </span>
+        <div className="flex flex-col items-end gap-1.5">
+          <span className="flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+            {ESTADO_ICON[p.estado] ?? <Clock className="size-5" />}
+            {ESTADO_LABEL_CLIENTE[p.estado as keyof typeof ESTADO_LABEL_CLIENTE] ?? p.estado}
+          </span>
+          <button
+            onClick={() => onVerDetalle(p.id)}
+            className="flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/5 px-2 py-1 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/15"
+          >
+            <Eye className="size-3" /> Ver detalle
+          </button>
+        </div>
       </div>
 
       {p.estado !== "cancelado" && (

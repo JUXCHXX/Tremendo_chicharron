@@ -39,6 +39,7 @@ import { supabase } from "@/lib/supabase";
 import { usePedidosRealtime, type PedidoDb } from "@/lib/use-pedidos";
 import { ESTADO_LABEL_STAFF, type EstadoPedido } from "@/lib/store";
 import { imprimirFacturaTermica } from "@/lib/documentos";
+import { DetallePedidoModal } from "@/components/DetallePedidoModal";
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async ({ location }) => {
@@ -113,6 +114,7 @@ function Admin() {
   const [cambiandoId, setCambiandoId] = useState<string | null>(null);
   const [errorAccion, setErrorAccion] = useState("");
   const [busquedaComanda, setBusquedaComanda] = useState("");
+  const [detalleId, setDetalleId] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -226,6 +228,8 @@ function Admin() {
         .slice(0, 60) + (pd.items.length > 1 ? "…" : "")
     );
   };
+
+  const pedidoDetalle = pedidos.find((p) => p.id === detalleId) ?? null;
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -344,6 +348,7 @@ function Admin() {
                       onCambiarEstado={cambiarEstadoDb}
                       onSetDomicilio={setDomicilioDb}
                       cambiandoId={cambiandoId}
+                      onVerDetalle={(id) => setDetalleId(id)}
                     />
                   );
                 })}
@@ -360,6 +365,18 @@ function Admin() {
                 ) : null}
               </DragOverlay>
             </DndContext>
+
+            <DetallePedidoModal
+              pedido={pedidoDetalle}
+              abierto={detalleId !== null}
+              onCerrar={() => setDetalleId(null)}
+              staff
+              onGuardado={() => {
+                setDetalleId(null);
+                void recargar();
+              }}
+              onImprimir={(pd) => void imprimirFacturaTermica(pd as never)}
+            />
           </>
         )}
 
@@ -442,12 +459,14 @@ function KanbanColumna({
   onCambiarEstado,
   onSetDomicilio,
   cambiandoId,
+  onVerDetalle,
 }: {
   estado: EstadoPedido;
   pedidos: PedidoDb[];
   onCambiarEstado: (id: string, estado: string) => void;
   onSetDomicilio: (id: string, valor: number, pd: PedidoDb) => void;
   cambiandoId: string | null;
+  onVerDetalle: (id: string) => void;
 }) {
   const { setNodeRef, isOver } = useSortable({ id: estado });
   return (
@@ -472,6 +491,7 @@ function KanbanColumna({
               onCambiarEstado={onCambiarEstado}
               onSetDomicilio={onSetDomicilio}
               cambiandoId={cambiandoId}
+              onVerDetalle={onVerDetalle}
             />
           ))}
           {pedidos.length === 0 && (
@@ -490,12 +510,14 @@ function TarjetaPedido({
   onCambiarEstado,
   onSetDomicilio,
   cambiandoId,
+  onVerDetalle,
   overlay = false,
 }: {
   pd: PedidoDb;
   onCambiarEstado: (id: string, estado: string) => void;
   onSetDomicilio: (id: string, valor: number, pd: PedidoDb) => void;
   cambiandoId: string | null;
+  onVerDetalle?: (id: string) => void;
   overlay?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -516,18 +538,39 @@ function TarjetaPedido({
       style={style}
       {...attributes}
       {...listeners}
+      onClick={(e) => {
+        if (!overlay && onVerDetalle) {
+          e.stopPropagation();
+          onVerDetalle(pd.id);
+        }
+      }}
       className={`cursor-grab rounded-xl border-2 bg-card p-3 shadow-sm transition-shadow hover:shadow-md ${
         COLOR_ESTADO[pd.estado] ?? "border-border"
       } ${overlay ? "rotate-2" : ""}`}
     >
-      {/* Número de comanda + estado */}
+      {/* Número de comanda + estado + botón de ver detalle */}
       <div className="flex items-start justify-between gap-2">
-        <p className="font-display text-lg text-primary">{pd.numero_comanda}</p>
-        <span
-          className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${BADGE_ESTADO[pd.estado] ?? "bg-muted text-muted-foreground"}`}
-        >
-          {ESTADO_LABEL_STAFF[pd.estado as EstadoPedido] ?? pd.estado}
-        </span>
+        <p className="cursor-pointer font-display text-lg text-primary">{pd.numero_comanda}</p>
+        <div className="flex items-center gap-1">
+          <span
+            className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${BADGE_ESTADO[pd.estado] ?? "bg-muted text-muted-foreground"}`}
+          >
+            {ESTADO_LABEL_STAFF[pd.estado as EstadoPedido] ?? pd.estado}
+          </span>
+          {!overlay && onVerDetalle && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onVerDetalle(pd.id);
+              }}
+              title="Ver detalle del pedido"
+              aria-label={`Ver detalle de ${pd.numero_comanda}`}
+              className="rounded-lg border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/20"
+            >
+              Detalle
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Cliente */}

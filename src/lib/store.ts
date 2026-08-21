@@ -322,18 +322,24 @@ export async function crearPedido(data: {
       if (pedidoError) throw pedidoError;
 
       // 3) Insertar items
-      const { error: itemsError } = await supabase.from("pedido_items").insert(
-        data.items.map((i) => ({
-          pedido_id: pedido.id,
-          producto_id: i.producto_id,
-          nombre_producto: i.nombre,
-          cantidad: i.cantidad,
-          variante_personas: i.variante_personas,
-          combo: i.combo,
-          notas: i.notas,
-          precio_unitario: i.precio_unitario,
-        })),
-      );
+      // IMPORTANTE: se envía el header x-cliente-telefono porque la política
+      // RLS items_update_ventana_cliente (migración 18) exige que el cliente
+      // anónimo solo pueda insertar items de SUS propios pedidos.
+      const { error: itemsError } = await supabase
+        .from("pedido_items")
+        .insert(
+          data.items.map((i) => ({
+            pedido_id: pedido.id,
+            producto_id: i.producto_id,
+            nombre_producto: i.nombre,
+            cantidad: i.cantidad,
+            variante_personas: i.variante_personas,
+            combo: i.combo,
+            notas: i.notas,
+            precio_unitario: i.precio_unitario,
+          })),
+        )
+        .setHeader("x-cliente-telefono", pedido.cliente_telefono);
       if (itemsError) throw itemsError;
     } catch (e) {
       // ── Manejo de falsos errores en celular ──────────────────────────────
