@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { ArrowLeft, Clock } from "lucide-react";
+import { ArrowLeft, Clock, Printer } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import {
   ESTADOS_FLUJO,
@@ -181,13 +181,18 @@ function DetallePedido({ pedido }: { pedido: Pedido }) {
         </p>
       )}
 
-      <button
-        onClick={() => descargarFactura(pedido)}
-        className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-border py-3 font-display text-xl"
-      >
-        <img src="/descargarfactura.png" alt="" className="size-6 rounded" />
-        Descargar factura
-      </button>
+      {/* El cliente solo puede descargar la factura cuando el pago ya fue confirmado */}
+      {["pago_confirmado", "en_cocina", "en_preparacion", "en_camino", "entregado"].includes(
+        pedido.estado,
+      ) && (
+        <button
+          onClick={() => void descargarFactura(pedido)}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/40 bg-primary/10 py-3 font-display text-xl text-primary transition-colors hover:bg-primary/20"
+        >
+          <Printer className="size-5" />
+          Descargar factura
+        </button>
+      )}
     </>
   );
 }

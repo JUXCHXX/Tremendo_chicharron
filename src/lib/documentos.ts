@@ -4,36 +4,200 @@ import { ESTADO_LABEL } from "./store";
 import { obtenerNit } from "./supabase";
 import { jsPDF } from "jspdf";
 
+/**
+ * Abre una ventana de impresión con el formato de ticket térmico (80mm).
+ * El ancho de la ventana se ajusta al ancho típico de impresoras térmicas.
+ */
 function abrirImpresion(titulo: string, cuerpo: string) {
   const w = window.open("", "_blank", "width=420,height=720");
   if (!w) return;
   w.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"/>
   <title>${titulo}</title>
   <style>
-    body{font-family:ui-monospace,Menlo,monospace;background:#fff;color:#111;padding:18px;font-size:12px}
-    h1{font-size:16px;margin:0 0 2px;text-transform:uppercase;letter-spacing:1px}
-    table{width:100%;border-collapse:collapse;margin-top:8px}
-    td{padding:3px 0;vertical-align:top}
-    .r{text-align:right}
-    hr{border:none;border-top:1px dashed #999;margin:10px 0}
-    .tot{font-size:14px;font-weight:700}
-    small{color:#555}
+    @page { size: 80mm auto; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: ui-monospace, "Courier New", Menlo, monospace;
+      background: #fff;
+      color: #000;
+      width: 80mm;
+      margin: 0 auto;
+      padding: 6mm 4mm;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .centro { text-align: center; }
+    .negrita { font-weight: 700; }
+    .grande { font-size: 15px; }
+    .mediano { font-size: 13px; }
+    .pequeno { font-size: 9px; }
+    .gris { color: #444; }
+    .doble { letter-spacing: 1px; }
+    .separador { border-top: 1px dashed #000; margin: 6px 0; }
+    .separador-solido { border-top: 1px solid #000; margin: 6px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 1px 0; vertical-align: top; }
+    .r { text-align: right; white-space: nowrap; }
+    .c { text-align: center; }
+    .item-nombre { font-weight: 700; }
+    .item-nota { color: #333; padding-left: 8px; }
+    .item-precio { text-align: right; white-space: nowrap; }
+    .fila-total { font-size: 14px; font-weight: 700; }
+    .fila-total td { padding-top: 3px; }
+    .pago-metodo { font-size: 13px; font-weight: 700; letter-spacing: 2px; }
+    .pie { margin-top: 8px; text-align: center; }
+    .pie .marca { font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+    .nota-pie { font-size: 9px; color: #333; margin-top: 4px; }
+    .cliente-bloque { margin-top: 4px; }
+    .cliente-bloque .fila { display: flex; justify-content: space-between; }
+    .cliente-bloque .fila span:last-child { text-align: right; }
+    .encabezado { margin-bottom: 4px; }
+    .encabezado .razon { font-size: 9px; color: #333; }
+    .encabezado .nit { font-size: 9px; color: #333; }
+    .factura-titulo { font-size: 13px; font-weight: 700; letter-spacing: 2px; margin-top: 4px; }
+    .factura-meta { display: flex; justify-content: space-between; font-size: 10px; margin-top: 2px; }
+    .factura-meta .fecha { text-align: left; }
+    .factura-meta .numero { text-align: right; }
+    .hora { text-align: right; font-size: 10px; }
+    .seccion-titulo { font-size: 10px; font-weight: 700; letter-spacing: 1px; margin-top: 6px; }
+    .detalle-encabezado { font-size: 9px; font-weight: 700; border-bottom: 1px solid #000; padding-bottom: 2px; }
+    .detalle-encabezado td { padding: 2px 0; }
+    .item-bloque { margin-top: 3px; }
+    .item-bloque .fila-principal { display: flex; justify-content: space-between; }
+    .item-bloque .fila-principal .nombre { font-weight: 700; }
+    .item-bloque .fila-principal .total { text-align: right; white-space: nowrap; }
+    .item-bloque .nota { color: #333; padding-left: 10px; font-size: 10px; }
+    .item-bloque .precio-unitario { color: #333; padding-left: 10px; font-size: 10px; }
+    .totales { margin-top: 4px; }
+    .totales .fila { display: flex; justify-content: space-between; }
+    .totales .fila .label { text-align: left; }
+    .totales .fila .valor { text-align: right; white-space: nowrap; }
+    .totales .fila-total { font-size: 14px; font-weight: 700; border-top: 1px solid #000; padding-top: 3px; }
+    .pago-bloque { margin-top: 6px; }
+    .pago-bloque .metodo { font-size: 13px; font-weight: 700; letter-spacing: 2px; }
+    .pago-bloque .fila { display: flex; justify-content: space-between; }
+    .pago-bloque .fila .label { text-align: left; }
+    .pago-bloque .fila .valor { text-align: right; white-space: nowrap; }
+    .nota-final { margin-top: 8px; text-align: center; font-size: 9px; color: #333; }
+    .marca-final { margin-top: 6px; text-align: center; font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+    .gracias { margin-top: 2px; text-align: center; font-size: 10px; }
   </style></head><body>${cuerpo}
   <script>window.onload=()=>window.print()</script></body></html>`);
   w.document.close();
 }
 
-const filas = (pd: Pedido) =>
-  pd.items
-    .map(
-      (i) =>
-        `<tr><td>${i.cantidad}x ${i.nombre}${
-          i.variante_personas ? ` (${i.variante_personas} pers.)` : ""
-        }${i.combo ? " + combo" : ""}${
-          i.notas ? `<br/><small>Nota: ${i.notas}</small>` : ""
-        }</td><td class="r">${formatCOP(i.precio_unitario * i.cantidad)}</td></tr>`,
-    )
+/** Formatea la fecha en formato colombiano: 20/08/2026 */
+function formatearFecha(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
+/** Formatea la hora en formato colombiano: 7:17 p. m. */
+function formatearHora(iso: string): string {
+  const d = new Date(iso);
+  let horas = d.getHours();
+  const minutos = String(d.getMinutes()).padStart(2, "0");
+  const ampm = horas >= 12 ? "p. m." : "a. m.";
+  horas = horas % 12 || 12;
+  return `${horas}:${minutos} ${ampm}`;
+}
+
+/** Genera el HTML del ticket térmico de factura (formato 80mm). */
+function generarTicketFactura(pd: Pedido, nit: string): string {
+  const itemsHtml = pd.items
+    .map((i) => {
+      const nombre = `${i.cantidad}  ${i.nombre}${i.variante_personas ? ` (${i.variante_personas} pers.)` : ""}${i.combo ? " + combo" : ""}`;
+      const notas = i.notas
+        ? i.notas
+            .split("\n")
+            .map((n) => `<div class="nota">• ${n}</div>`)
+            .join("")
+        : "";
+      return `<div class="item-bloque">
+        <div class="fila-principal">
+          <span class="nombre">${nombre}</span>
+          <span class="total">${formatCOP(i.precio_unitario * i.cantidad)}</span>
+        </div>
+        ${notas}
+        <div class="precio-unitario">${formatCOP(i.precio_unitario)} c/u</div>
+      </div>`;
+    })
     .join("");
+
+  const pagoHtml =
+    pd.medio_pago === "efectivo" && pd.monto_efectivo_recibido != null
+      ? `<div class="pago-bloque">
+          <div class="metodo">${pd.medio_pago.toUpperCase()}</div>
+          <div class="fila"><span class="label">Recibido</span><span class="valor">${formatCOP(pd.monto_efectivo_recibido)}</span></div>
+          <div class="fila"><span class="label">Cambio</span><span class="valor">${formatCOP(Math.max(pd.vuelto ?? 0, 0))}</span></div>
+        </div>`
+      : `<div class="pago-bloque">
+          <div class="metodo">${pd.medio_pago.toUpperCase()}</div>
+        </div>`;
+
+  return `
+    <div class="encabezado centro">
+      <div class="grande negrita doble">TREMENDO CHICHARRÓN</div>
+      <div class="razon">Comercializadora Tremendo Chicharrón SAS</div>
+      <div class="nit">NIT ${nit} | Manizales, Colombia</div>
+    </div>
+
+    <div class="factura-titulo centro">FACTURA DE VENTA</div>
+    <div class="factura-meta">
+      <span class="fecha">${formatearFecha(pd.creado_en)}</span>
+      <span class="numero">No. ${pd.numero_comanda}</span>
+    </div>
+    <div class="hora">${formatearHora(pd.creado_en)}</div>
+
+    <div class="separador"></div>
+
+    <div class="seccion-titulo">CLIENTE</div>
+    <div class="cliente-bloque">
+      <div class="fila">
+        <span>${pd.cliente_nombre}</span>
+        <span>${pd.cliente_telefono}</span>
+      </div>
+      <div class="fila">
+        <span>${pd.direccion_entrega}</span>
+      </div>
+      ${pd.barrio ? `<div class="fila"><span>Barrio ${pd.barrio}</span></div>` : ""}
+    </div>
+
+    <div class="separador"></div>
+
+    <div class="seccion-titulo">DETALLE DE LA COMPRA</div>
+    <table class="detalle-encabezado">
+      <tr>
+        <td style="width:12%">CANT.</td>
+        <td>PRODUCTO</td>
+        <td class="r" style="width:25%">TOTAL</td>
+      </tr>
+    </table>
+    ${itemsHtml}
+
+    <div class="separador"></div>
+
+    <div class="totales">
+      <div class="fila"><span class="label">Subtotal</span><span class="valor">${formatCOP(pd.subtotal)}</span></div>
+      <div class="fila"><span class="label">Domicilio</span><span class="valor">${formatCOP(pd.valor_domicilio)}</span></div>
+      <div class="fila fila-total"><span class="label">TOTAL</span><span class="valor">${formatCOP(pd.total)}</span></div>
+    </div>
+
+    <div class="separador"></div>
+
+    <div class="seccion-titulo">MÉTODO DE PAGO</div>
+    ${pagoHtml}
+
+    <div class="separador"></div>
+
+    <div class="nota-final">
+      Gracias por elegirnos. Conserva esta factura<br/>como soporte de tu compra.
+    </div>
+
+    <div class="marca-final">TREMENDO CHICHARRÓN</div>
+    <div class="gracias">¡Gracias por tu compra!</div>
+  `;
+}
 
 /** Comanda para cocina/caja (imprimible o guardable como PDF). */
 export function imprimirComanda(pd: Pedido) {
@@ -59,153 +223,201 @@ export function imprimirComanda(pd: Pedido) {
   );
 }
 
-/** Factura del cliente. */
+const filas = (pd: Pedido) =>
+  pd.items
+    .map(
+      (i) =>
+        `<tr><td>${i.cantidad}x ${i.nombre}${
+          i.variante_personas ? ` (${i.variante_personas} pers.)` : ""
+        }${i.combo ? " + combo" : ""}${
+          i.notas ? `<br/><small>Nota: ${i.notas}</small>` : ""
+        }</td><td class="r">${formatCOP(i.precio_unitario * i.cantidad)}</td></tr>`,
+    )
+    .join("");
+
+/**
+ * Imprime la factura directamente en la impresora térmica (formato 80mm).
+ * Abre el diálogo de impresión del navegador con el ticket ya formateado.
+ */
+export async function imprimirFacturaTermica(pd: Pedido) {
+  const nit = await obtenerNit();
+  abrirImpresion(`Factura ${pd.numero_comanda}`, generarTicketFactura(pd, nit));
+}
+
+/** Factura del cliente (formato térmico 80mm). */
 export async function descargarFactura(pd: Pedido) {
   const nit = await obtenerNit();
-  abrirImpresion(
-    `Factura ${pd.numero_comanda}`,
-    `<h1>Factura de venta</h1>
-     <small>Comercializadora Tremendo Chicharrón SAS · NIT ${nit}</small><hr/>
-     <div>Comanda: <b>${pd.numero_comanda}</b></div>
-     <div>Fecha: ${new Date(pd.creado_en).toLocaleString("es-CO")}</div>
-     <div>Cliente: ${pd.cliente_nombre} · ${pd.cliente_telefono}</div>
-     <div>Entrega: ${pd.direccion_entrega}</div><hr/>
-     <table>${filas(pd)}</table><hr/>
-     <table>
-       <tr><td>Subtotal</td><td class="r">${formatCOP(pd.subtotal)}</td></tr>
-       <tr><td>Domicilio</td><td class="r">${formatCOP(pd.valor_domicilio)}</td></tr>
-       <tr class="tot"><td>TOTAL</td><td class="r">${formatCOP(pd.total)}</td></tr>
-     </table>
-     <hr/><small>Gracias por tu compra. Manizales, Colombia.</small>`,
-  );
+  abrirImpresion(`Factura ${pd.numero_comanda}`, generarTicketFactura(pd, nit));
 }
 
 /**
- * Factura en PDF con formato profesional (jsPDF).
- * Incluye encabezado con logo, NIT, datos de contacto, comanda, cliente,
- * tabla de productos, desglose de totales y medio de pago.
+ * Factura en PDF con formato térmico (80mm) — una sola hoja/rollo.
+ * Reemplaza el formato A4 anterior. Incluye encabezado con NIT, datos del
+ * cliente, tabla de productos con notas, desglose de totales, método de pago
+ * y pie de agradecimiento.
  */
 export async function descargarFacturaPdf(pd: Pedido) {
   const nit = await obtenerNit();
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const W = 210;
-  const M = 15;
-  let y = 20;
+  const doc = new jsPDF({ unit: "mm", format: [80, 200] });
+  const W = 80;
+  const M = 5;
+  let y = 8;
 
   // ── Encabezado ──
-  doc.setFillColor(20, 20, 20);
-  doc.rect(0, 0, W, 30, "F");
-  doc.setTextColor(255, 200, 0);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("TREMENDO CHICHARRÓN", M, 14);
-  doc.setFontSize(9);
-  doc.setTextColor(255, 255, 255);
-  doc.text("Comercializadora Tremendo Chicharrón SAS", M, 20);
-  doc.text(`NIT: ${nit}`, M, 24);
-  doc.text("Manizales, Colombia", M, 28);
-
-  // ── Número de comanda y fecha ──
-  y = 40;
-  doc.setTextColor(20, 20, 20);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text(`FACTURA ${pd.numero_comanda}`, M, y);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Fecha: ${new Date(pd.creado_en).toLocaleString("es-CO")}`, W - M, y, {
-    align: "right",
-  });
-  y += 8;
-  doc.text(`Versión: v${pd.version}`, W - M, y, { align: "right" });
-
-  // ── Datos del cliente ──
-  y += 8;
-  doc.setDrawColor(200, 200, 200);
-  doc.line(M, y, W - M, y);
-  y += 6;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(20, 20, 20);
-  doc.text("DATOS DEL CLIENTE", M, y);
-  y += 6;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.text(`Cliente: ${pd.cliente_nombre}`, M, y);
-  doc.text(`Teléfono: ${pd.cliente_telefono}`, W / 2, y);
+  doc.setFont("courier", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(0, 0, 0);
+  doc.text("TREMENDO CHICHARRÓN", W / 2, y, { align: "center" });
   y += 5;
-  doc.text(`Dirección: ${pd.direccion_entrega}`, M, y);
-  if (pd.barrio) doc.text(`Barrio: ${pd.barrio}`, W / 2, y);
+  doc.setFont("courier", "normal");
+  doc.setFontSize(7);
+  doc.text("Comercializadora Tremendo Chicharrón SAS", W / 2, y, { align: "center" });
+  y += 3.5;
+  doc.text(`NIT ${nit} | Manizales, Colombia`, W / 2, y, { align: "center" });
+  y += 5;
 
-  // ── Tabla de productos ──
-  y += 10;
-  doc.setFillColor(240, 240, 240);
-  doc.rect(M, y - 4, W - 2 * M, 6, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.text("CANT", M + 2, y);
-  doc.text("PRODUCTO", M + 14, y);
-  doc.text("P. UNIT", W - M - 40, y, { align: "right" });
-  doc.text("SUBTOTAL", W - M - 2, y, { align: "right" });
-  y += 6;
+  // ── Título factura ──
+  doc.setFont("courier", "bold");
+  doc.setFontSize(10);
+  doc.text("FACTURA DE VENTA", W / 2, y, { align: "center" });
+  y += 4.5;
 
-  doc.setFont("helvetica", "normal");
+  // ── Fecha y número ──
+  doc.setFont("courier", "normal");
+  doc.setFontSize(7);
+  doc.text(formatearFecha(pd.creado_en), M, y);
+  doc.text(`No. ${pd.numero_comanda}`, W - M, y, { align: "right" });
+  y += 3.5;
+  doc.text(formatearHora(pd.creado_en), W - M, y, { align: "right" });
+  y += 3;
+
+  // ── Separador ──
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineDashPattern([1, 1], 0);
+  doc.line(M, y, W - M, y);
+  y += 4;
+
+  // ── Cliente ──
+  doc.setFont("courier", "bold");
+  doc.setFontSize(7);
+  doc.text("CLIENTE", M, y);
+  y += 4;
+  doc.setFont("courier", "normal");
+  doc.text(pd.cliente_nombre, M, y);
+  doc.text(pd.cliente_telefono, W - M, y, { align: "right" });
+  y += 3.5;
+  doc.text(pd.direccion_entrega, M, y);
+  y += 3.5;
+  if (pd.barrio) {
+    doc.text(`Barrio ${pd.barrio}`, M, y);
+    y += 3.5;
+  }
+  y += 1;
+
+  // ── Separador ──
+  doc.line(M, y, W - M, y);
+  y += 4;
+
+  // ── Detalle de la compra ──
+  doc.setFont("courier", "bold");
+  doc.setFontSize(7);
+  doc.text("DETALLE DE LA COMPRA", M, y);
+  y += 4;
+  doc.text("CANT.", M, y);
+  doc.text("PRODUCTO", M + 10, y);
+  doc.text("TOTAL", W - M, y, { align: "right" });
+  y += 3;
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineDashPattern([], 0);
+  doc.line(M, y, W - M, y);
+  y += 3;
+
+  // ── Items ──
+  doc.setFont("courier", "normal");
   pd.items.forEach((i) => {
-    const nombre = `${i.cantidad}x ${i.nombre}${i.variante_personas ? ` (${i.variante_personas} pers.)` : ""}${i.combo ? " + combo" : ""}`;
-    doc.text(String(i.cantidad), M + 2, y);
-    doc.text(nombre, M + 14, y);
-    doc.text(formatCOP(i.precio_unitario), W - M - 40, y, { align: "right" });
-    doc.text(formatCOP(i.precio_unitario * i.cantidad), W - M - 2, y, { align: "right" });
+    const nombre = `${i.cantidad}  ${i.nombre}${i.variante_personas ? ` (${i.variante_personas} pers.)` : ""}${i.combo ? " + combo" : ""}`;
+    doc.setFont("courier", "bold");
+    doc.text(nombre, M, y);
+    doc.setFont("courier", "normal");
+    doc.text(formatCOP(i.precio_unitario * i.cantidad), W - M, y, { align: "right" });
+    y += 3.5;
     if (i.notas) {
-      y += 4;
-      doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Nota: ${i.notas}`, M + 14, y);
-      doc.setFontSize(9);
-      doc.setTextColor(20, 20, 20);
+      i.notas.split("\n").forEach((n) => {
+        doc.setFontSize(6.5);
+        doc.text(`• ${n}`, M + 3, y);
+        y += 3;
+      });
+      doc.setFontSize(7);
     }
-    y += 6;
+    doc.text(`${formatCOP(i.precio_unitario)} c/u`, M + 3, y);
+    y += 4;
   });
 
-  // ── Desglose de totales ──
-  y += 4;
-  doc.setDrawColor(200, 200, 200);
+  // ── Separador ──
+  doc.setLineDashPattern([1, 1], 0);
   doc.line(M, y, W - M, y);
-  y += 6;
+  y += 4;
+
+  // ── Totales ──
+  doc.setFont("courier", "normal");
+  doc.setFontSize(7);
   doc.text("Subtotal", M, y);
   doc.text(formatCOP(pd.subtotal), W - M, y, { align: "right" });
-  y += 6;
+  y += 3.5;
   doc.text("Domicilio", M, y);
   doc.text(formatCOP(pd.valor_domicilio), W - M, y, { align: "right" });
-  y += 8;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
+  y += 4;
+  doc.setFont("courier", "bold");
+  doc.setFontSize(10);
   doc.text("TOTAL", M, y);
   doc.text(formatCOP(pd.total), W - M, y, { align: "right" });
+  y += 5;
 
-  // ── Medio de pago ──
-  y += 10;
-  doc.setFont("helvetica", "normal");
+  // ── Separador ──
+  doc.setLineDashPattern([1, 1], 0);
+  doc.line(M, y, W - M, y);
+  y += 4;
+
+  // ── Método de pago ──
+  doc.setFont("courier", "bold");
+  doc.setFontSize(7);
+  doc.text("MÉTODO DE PAGO", M, y);
+  y += 4;
   doc.setFontSize(9);
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Medio de pago: ${pd.medio_pago}`, M, y);
+  doc.text(pd.medio_pago.toUpperCase(), M, y);
+  y += 4;
   if (pd.medio_pago === "efectivo" && pd.monto_efectivo_recibido != null) {
-    y += 5;
-    doc.text(`Recibe: ${formatCOP(pd.monto_efectivo_recibido)}`, M, y);
-    doc.text(`Vuelto: ${formatCOP(Math.max(pd.vuelto ?? 0, 0))}`, W - M, y, { align: "right" });
+    doc.setFont("courier", "normal");
+    doc.setFontSize(7);
+    doc.text("Recibido", M, y);
+    doc.text(formatCOP(pd.monto_efectivo_recibido), W - M, y, { align: "right" });
+    y += 3.5;
+    doc.text("Cambio", M, y);
+    doc.text(formatCOP(Math.max(pd.vuelto ?? 0, 0)), W - M, y, { align: "right" });
+    y += 4;
   }
 
-  // ── Pie ──
-  y = 280;
-  doc.setDrawColor(200, 200, 200);
+  // ── Separador ──
+  doc.setLineDashPattern([1, 1], 0);
   doc.line(M, y, W - M, y);
-  y += 6;
-  doc.setFontSize(8);
-  doc.setTextColor(150, 150, 150);
-  doc.text("¡Gracias por tu compra! Tremendo Chicharrón — Manizales, Colombia.", W / 2, y, {
-    align: "center",
-  });
+  y += 4;
+
+  // ── Nota final ──
+  doc.setFont("courier", "normal");
+  doc.setFontSize(6.5);
+  doc.text("Gracias por elegirnos. Conserva esta factura", W / 2, y, { align: "center" });
+  y += 3;
+  doc.text("como soporte de tu compra.", W / 2, y, { align: "center" });
+  y += 5;
+
+  // ── Marca final ──
+  doc.setFont("courier", "bold");
+  doc.setFontSize(10);
+  doc.text("TREMENDO CHICHARRÓN", W / 2, y, { align: "center" });
+  y += 4;
+  doc.setFont("courier", "normal");
+  doc.setFontSize(7);
+  doc.text("¡Gracias por tu compra!", W / 2, y, { align: "center" });
 
   doc.save(`Factura_${pd.numero_comanda}.pdf`);
 }

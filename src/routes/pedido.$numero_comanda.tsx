@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { ArrowLeft, Search, MessageCircle } from "lucide-react";
+import { ArrowLeft, Search, MessageCircle, Printer } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { supabase } from "@/lib/supabase";
-import { linkPago } from "@/lib/documentos";
+import { linkPago, descargarFactura } from "@/lib/documentos";
 import { ESTADOS_FLUJO, ESTADO_LABEL_CLIENTE, type Pedido } from "@/lib/store";
 
 export const Route = createFileRoute("/pedido/$numero_comanda")({
@@ -263,6 +263,19 @@ function DetallePedido({ pedido }: { pedido: Pedido }) {
         >
           <MessageCircle className="size-6" /> Ir a Pagar
         </a>
+      )}
+
+      {/* El cliente solo puede descargar la factura cuando el pago ya fue confirmado */}
+      {["pago_confirmado", "en_cocina", "en_preparacion", "en_camino", "entregado"].includes(
+        pedido.estado,
+      ) && (
+        <button
+          onClick={() => void descargarFactura(pedido)}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/40 bg-primary/10 py-3 font-display text-xl text-primary transition-colors hover:bg-primary/20"
+        >
+          <Printer className="size-5" />
+          Descargar factura
+        </button>
       )}
     </>
   );

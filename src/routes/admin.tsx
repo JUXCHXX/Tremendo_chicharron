@@ -18,6 +18,9 @@ import {
   X,
   AlertCircle,
   Loader2,
+  Phone,
+  MapPin,
+  StickyNote,
 } from "lucide-react";
 import {
   DndContext,
@@ -34,8 +37,8 @@ import { estaAutenticado, cerrarSesion } from "@/lib/auth-staff";
 import { formatCOP } from "@/lib/menu-data";
 import { supabase } from "@/lib/supabase";
 import { usePedidosRealtime, type PedidoDb } from "@/lib/use-pedidos";
-import { ESTADOS_FLUJO, ESTADO_LABEL_STAFF, type EstadoPedido } from "@/lib/store";
-import { imprimirComanda, descargarFacturaPdf } from "@/lib/documentos";
+import { ESTADO_LABEL_STAFF, type EstadoPedido } from "@/lib/store";
+import { imprimirFacturaTermica } from "@/lib/documentos";
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async ({ location }) => {
@@ -74,24 +77,29 @@ const COLUMNAS: EstadoPedido[] = [
   "entregado",
 ];
 
+/**
+ * Colores de acento por estado (solo borde/acento — el fondo de la tarjeta
+ * siempre es oscuro con texto claro para garantizar legibilidad en todas las
+ * columnas).
+ */
 const COLOR_ESTADO: Record<string, string> = {
-  pendiente_confirmacion_cajera: "border-purple-400 bg-purple-50",
-  pendiente_pago: "border-amber-400 bg-amber-50",
-  pago_confirmado: "border-yellow-500 bg-yellow-50",
-  en_cocina: "border-orange-500 bg-orange-50",
-  en_preparacion: "border-red-500 bg-red-50",
-  en_camino: "border-blue-500 bg-blue-50",
-  entregado: "border-green-500 bg-green-50",
+  pendiente_confirmacion_cajera: "border-purple-500",
+  pendiente_pago: "border-amber-500",
+  pago_confirmado: "border-yellow-500",
+  en_cocina: "border-orange-500",
+  en_preparacion: "border-red-500",
+  en_camino: "border-blue-500",
+  entregado: "border-green-500",
 };
 
 const BADGE_ESTADO: Record<string, string> = {
-  pendiente_confirmacion_cajera: "bg-purple-100 text-purple-800",
-  pendiente_pago: "bg-amber-100 text-amber-800",
-  pago_confirmado: "bg-yellow-100 text-yellow-800",
-  en_cocina: "bg-orange-100 text-orange-800",
-  en_preparacion: "bg-red-100 text-red-800",
-  en_camino: "bg-blue-100 text-blue-800",
-  entregado: "bg-green-100 text-green-800",
+  pendiente_confirmacion_cajera: "bg-purple-500/20 text-purple-300 border-purple-500/40",
+  pendiente_pago: "bg-amber-500/20 text-amber-300 border-amber-500/40",
+  pago_confirmado: "bg-yellow-500/20 text-yellow-300 border-yellow-500/40",
+  en_cocina: "bg-orange-500/20 text-orange-300 border-orange-500/40",
+  en_preparacion: "bg-red-500/20 text-red-300 border-red-500/40",
+  en_camino: "bg-blue-500/20 text-blue-300 border-blue-500/40",
+  entregado: "bg-green-500/20 text-green-300 border-green-500/40",
 };
 
 type Seccion = "pedidos" | "historial" | "config";
@@ -395,7 +403,7 @@ function Admin() {
                         {formatCOP(pd.total)}
                       </span>
                       <button
-                        onClick={() => void descargarFacturaPdf(pd as never)}
+                        onClick={() => void imprimirFacturaTermica(pd as never)}
                         className="flex items-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
                       >
                         <Printer className="size-4" />
@@ -500,12 +508,7 @@ function TarjetaPedido({
     opacity: isDragging ? 0.4 : 1,
   };
 
-  const resumen = pd.items
-    ? pd.items
-        .map((i) => `${i.cantidad}x ${i.nombre}`)
-        .join(", ")
-        .slice(0, 60) + (pd.items.length > 1 ? "…" : "")
-    : "Sin items";
+  const items = pd.items ?? [];
 
   return (
     <article
@@ -517,22 +520,56 @@ function TarjetaPedido({
         COLOR_ESTADO[pd.estado] ?? "border-border"
       } ${overlay ? "rotate-2" : ""}`}
     >
+      {/* Número de comanda + estado */}
       <div className="flex items-start justify-between gap-2">
         <p className="font-display text-lg text-primary">{pd.numero_comanda}</p>
         <span
-          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${BADGE_ESTADO[pd.estado] ?? "bg-muted text-muted-foreground"}`}
+          className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${BADGE_ESTADO[pd.estado] ?? "bg-muted text-muted-foreground"}`}
         >
           {ESTADO_LABEL_STAFF[pd.estado as EstadoPedido] ?? pd.estado}
         </span>
       </div>
 
-      <p className="mt-1 text-sm font-semibold">{pd.cliente_nombre}</p>
-      <p className="text-xs text-muted-foreground">{pd.cliente_telefono}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{pd.direccion_entrega}</p>
-      {pd.barrio && <p className="text-xs text-primary">Barrio: {pd.barrio}</p>}
+      {/* Cliente */}
+      <p className="mt-2 text-sm font-semibold text-foreground">{pd.cliente_nombre}</p>
+      <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+        <Phone className="size-3 shrink-0" />
+        {pd.cliente_telefono}
+      </p>
+      <p className="mt-1 flex items-start gap-1 text-xs text-muted-foreground">
+        <MapPin className="mt-0.5 size-3 shrink-0" />
+        <span>
+          {pd.direccion_entrega}
+          {pd.barrio ? ` · ${pd.barrio}` : ""}
+        </span>
+      </p>
 
-      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{resumen}</p>
+      {/* Productos con notas */}
+      <div className="mt-2 space-y-1.5 border-t border-border pt-2">
+        {items.length === 0 && <p className="text-xs text-muted-foreground">Sin items</p>}
+        {items.map((item, idx) => (
+          <div key={item.key ?? idx} className="text-xs">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="font-medium text-foreground">
+                <span className="font-bold text-primary">{item.cantidad}x</span> {item.nombre}
+                {item.variante_personas ? ` (${item.variante_personas} pers.)` : ""}
+                {item.combo ? " + combo" : ""}
+              </span>
+              <span className="shrink-0 text-muted-foreground">
+                {formatCOP(item.precio_unitario * item.cantidad)}
+              </span>
+            </div>
+            {item.notas ? (
+              <div className="mt-0.5 flex items-start gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5">
+                <StickyNote className="mt-0.5 size-3 shrink-0 text-amber-400" />
+                <span className="text-[11px] text-amber-300">{item.notas}</span>
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
 
+      {/* Total + acciones */}
       <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
         <span className="font-display text-xl text-primary">{formatCOP(pd.total)}</span>
         <div className="flex items-center gap-1">
@@ -561,17 +598,20 @@ function TarjetaPedido({
               Confirmar pago
             </button>
           )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              void descargarFacturaPdf(pd as never);
-            }}
-            className="flex items-center gap-1 rounded-lg border border-primary/40 bg-primary/10 px-2 py-1 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/20"
-            title="Imprimir factura"
-          >
-            <Printer className="size-3" />
-            Imprimir
-          </button>
+          {/* La cajera solo imprime la factura cuando el pedido está en "Pendiente de pago" */}
+          {pd.estado === "pendiente_pago" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void imprimirFacturaTermica(pd as never);
+              }}
+              className="flex items-center gap-1 rounded-lg border border-primary/40 bg-primary/10 px-2 py-1 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/20"
+              title="Imprimir factura"
+            >
+              <Printer className="size-3" />
+              Imprimir
+            </button>
+          )}
         </div>
       </div>
 

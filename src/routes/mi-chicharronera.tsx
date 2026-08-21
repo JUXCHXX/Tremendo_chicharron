@@ -10,11 +10,12 @@ import {
   MessageCircle,
   Star,
   Send,
+  Printer,
 } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { getClienteLocal, normalizarTelefono } from "@/lib/clientes";
 import { usePedidosRealtime, type PedidoDb, type PedidoItemNormalizado } from "@/lib/use-pedidos";
-import { linkPago } from "@/lib/documentos";
+import { linkPago, descargarFactura } from "@/lib/documentos";
 import { ESTADOS_FLUJO, ESTADO_LABEL_CLIENTE } from "@/lib/store";
 import { cargarValoraciones, crearValoracion, type ValoracionDb } from "@/lib/valoraciones";
 import { StarRating } from "@/components/StarRating";
@@ -201,6 +202,18 @@ function PedidoCard({ pedido: p, telefono }: { pedido: PedidoDb; telefono: strin
         >
           <MessageCircle className="size-5" /> Pagar ahora · {formatCOP(p.total)}
         </a>
+      )}
+
+      {/* El cliente solo puede descargar la factura cuando el pago ya fue confirmado */}
+      {["pago_confirmado", "en_cocina", "en_preparacion", "en_camino", "entregado"].includes(
+        p.estado,
+      ) && (
+        <button
+          onClick={() => void descargarFactura(p as never)}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/40 bg-primary/10 py-3 font-display text-xl text-primary transition-colors hover:bg-primary/20"
+        >
+          <Printer className="size-5" /> Descargar factura
+        </button>
       )}
 
       {/* Califica tu pedido — solo cuando el pedido fue entregado. Cada plato se califica por separado. */}

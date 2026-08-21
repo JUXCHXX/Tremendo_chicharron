@@ -1,11 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { CheckCircle2, MessageCircle } from "lucide-react";
+import { CheckCircle2, MessageCircle, Printer } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { useStore, type Pedido } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { Model3DPlaceholder } from "@/components/Model3DPlaceholder";
-import { linkPago } from "@/lib/documentos";
+import { linkPago, descargarFactura } from "@/lib/documentos";
 import { getClienteLocal, normalizarTelefono } from "@/lib/clientes";
 
 export const Route = createFileRoute("/confirmacion/$comanda")({
@@ -308,6 +308,19 @@ function Confirmacion() {
         >
           <MessageCircle className="size-6" /> Ir a Pagar · {formatCOP(pedido.total)}
         </a>
+      )}
+
+      {/* El cliente solo puede descargar la factura cuando el pago ya fue confirmado */}
+      {["pago_confirmado", "en_cocina", "en_preparacion", "en_camino", "entregado"].includes(
+        pedido.estado,
+      ) && (
+        <button
+          onClick={() => void descargarFactura(pedido)}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/40 bg-primary/10 py-3 font-display text-xl text-primary transition-colors hover:bg-primary/20"
+        >
+          <Printer className="size-5" />
+          Descargar factura
+        </button>
       )}
 
       <Link
