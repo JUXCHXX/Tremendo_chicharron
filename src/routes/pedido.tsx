@@ -90,6 +90,8 @@ function Checkout() {
   const [error, setError] = useState("");
   const [listaAbierta, setListaAbierta] = useState(false);
   const [procesando, setProcesando] = useState(false);
+  const [propina, setPropina] = useState(0);
+  const [propinaOtro, setPropinaOtro] = useState(false);
   const barrioRef = useRef<HTMLDivElement>(null);
 
   // Precarga los datos del cliente guardados en el mini-login.
@@ -131,7 +133,7 @@ function Checkout() {
   }, [cart]);
 
   const valorDomicilio = barrioSel?.tarifa ?? 0;
-  const total = subtotal + valorDomicilio;
+  const total = subtotal + valorDomicilio + propina;
   const recibido = Number(billete.replace(/\D/g, "")) || 0;
   const vuelto = recibido - total;
 
@@ -183,6 +185,7 @@ function Checkout() {
         direccion_entrega: direccion.trim(),
         barrio: barrioSel.ubicacion,
         valor_domicilio: barrioSel.tarifa,
+        propina,
         medio_pago: medio,
         monto_efectivo_recibido: medio === "efectivo" ? recibido : null,
         items: cart,
@@ -244,6 +247,12 @@ function Checkout() {
           <span>Domicilio</span>
           <span className="text-primary">{barrioSel ? formatCOP(valorDomicilio) : "—"}</span>
         </div>
+        {propina > 0 && (
+          <div className="flex justify-between pt-1 text-sm">
+            <span>Propina domiciliario</span>
+            <span className="text-primary">{formatCOP(propina)}</span>
+          </div>
+        )}
         <div className="mt-1 flex justify-between border-t border-border pt-2 font-display text-2xl">
           <span>Total</span>
           <span className="text-primary">{formatCOP(total)}</span>
@@ -381,6 +390,72 @@ function Checkout() {
             </p>
           )}
         </label>
+
+        {/* Propina para el domiciliario */}
+        <div>
+          <span className="text-xs tracking-widest text-muted-foreground uppercase">
+            ¿Deseas dejar propina para el domiciliario?
+          </span>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {[1000, 2000, 3000].map((monto) => (
+              <button
+                key={monto}
+                type="button"
+                onClick={() => {
+                  setPropina(monto);
+                  setPropinaOtro(false);
+                }}
+                className={`rounded-xl border p-3 text-sm font-semibold ${
+                  propina === monto && !propinaOtro
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-card"
+                }`}
+              >
+                {formatCOP(monto)}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                setPropinaOtro(true);
+                setPropina(0);
+              }}
+              className={`rounded-xl border p-3 text-sm font-semibold ${
+                propinaOtro ? "border-primary bg-primary/10 text-primary" : "border-border bg-card"
+              }`}
+            >
+              Otro monto
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPropina(0);
+                setPropinaOtro(false);
+              }}
+              className={`rounded-xl border p-3 text-sm font-semibold ${
+                propina === 0 && !propinaOtro
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-card"
+              }`}
+            >
+              No dar propina
+            </button>
+          </div>
+          {propinaOtro && (
+            <input
+              inputMode="numeric"
+              value={propina === 0 ? "" : String(propina)}
+              onChange={(e) => setPropina(Number(e.target.value.replace(/\D/g, "")) || 0)}
+              placeholder="Escribe el monto en pesos"
+              className="mt-2 w-full rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+          )}
+          {propina > 0 && (
+            <p className="mt-1 text-xs text-primary">
+              💛 Propina domiciliario: {formatCOP(propina)}
+            </p>
+          )}
+        </div>
 
         <div>
           <span className="text-xs tracking-widest text-muted-foreground uppercase">

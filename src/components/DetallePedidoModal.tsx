@@ -183,6 +183,12 @@ export function DetallePedidoModal({
                 <span>Domicilio</span>
                 <span className="text-primary">{formatCOP(pedido.valor_domicilio)}</span>
               </div>
+              {pedido.propina > 0 && (
+                <div className="mt-1 flex justify-between">
+                  <span>Propina domiciliario</span>
+                  <span className="text-primary">{formatCOP(pedido.propina)}</span>
+                </div>
+              )}
               <div className="mt-1 flex justify-between border-t border-border pt-2 font-display text-2xl">
                 <span>Total</span>
                 <span className="text-primary">{formatCOP(pedido.total)}</span>

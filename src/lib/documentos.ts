@@ -180,6 +180,7 @@ function generarTicketFactura(pd: Pedido, nit: string): string {
     <div class="totales">
       <div class="fila"><span class="label">Subtotal</span><span class="valor">${formatCOP(pd.subtotal)}</span></div>
       <div class="fila"><span class="label">Domicilio</span><span class="valor">${formatCOP(pd.valor_domicilio)}</span></div>
+      ${pd.propina > 0 ? `<div class="fila"><span class="label">Propina domiciliario</span><span class="valor">${formatCOP(pd.propina)}</span></div>` : ""}
       <div class="fila fila-total"><span class="label">TOTAL</span><span class="valor">${formatCOP(pd.total)}</span></div>
     </div>
 
@@ -213,6 +214,7 @@ export function imprimirComanda(pd: Pedido) {
      <table>
        <tr><td>Subtotal</td><td class="r">${formatCOP(pd.subtotal)}</td></tr>
        <tr><td>Domicilio</td><td class="r">${formatCOP(pd.valor_domicilio)}</td></tr>
+       ${pd.propina > 0 ? `<tr><td>Propina domiciliario</td><td class="r">${formatCOP(pd.propina)}</td></tr>` : ""}
        <tr class="tot"><td>TOTAL</td><td class="r">${formatCOP(pd.total)}</td></tr>
      </table>
      <hr/><div>Pago: ${pd.medio_pago}${
@@ -366,7 +368,13 @@ export async function descargarFacturaPdf(pd: Pedido) {
   y += 3.5;
   doc.text("Domicilio", M, y);
   doc.text(formatCOP(pd.valor_domicilio), W - M, y, { align: "right" });
-  y += 4;
+  y += 3.5;
+  if (pd.propina > 0) {
+    doc.text("Propina domiciliario", M, y);
+    doc.text(formatCOP(pd.propina), W - M, y, { align: "right" });
+    y += 3.5;
+  }
+  y += 0.5;
   doc.setFont("courier", "bold");
   doc.setFontSize(10);
   doc.text("TOTAL", M, y);
@@ -437,6 +445,7 @@ export function mensajeWhatsApp(pd: Pedido): string {
     ``,
     `Subtotal: ${formatCOP(pd.subtotal)}`,
     `Domicilio: ${formatCOP(pd.valor_domicilio)}`,
+    ...(pd.propina > 0 ? [`Propina domiciliario: ${formatCOP(pd.propina)}`] : []),
     `*TOTAL: ${formatCOP(pd.total)}*`,
     ``,
     `Nombre: ${pd.cliente_nombre}`,

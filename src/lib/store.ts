@@ -95,6 +95,7 @@ export interface Pedido {
   monto_efectivo_recibido: number | null;
   vuelto: number | null;
   valor_domicilio: number;
+  propina: number;
   subtotal: number;
   total: number;
   estado: EstadoPedido;
@@ -250,6 +251,7 @@ export async function crearPedido(data: {
   direccion_entrega: string;
   barrio?: string | null;
   valor_domicilio?: number;
+  propina?: number;
   latitud?: number | null;
   longitud?: number | null;
   medio_pago: Pedido["medio_pago"];
@@ -258,7 +260,8 @@ export async function crearPedido(data: {
 }): Promise<Pedido> {
   const subtotal = cartTotal(data.items);
   const valorDomicilio = data.valor_domicilio ?? 0;
-  const total = subtotal + valorDomicilio;
+  const propina = data.propina ?? 0;
+  const total = subtotal + valorDomicilio + propina;
   const creado = new Date();
   const id = crypto.randomUUID();
 
@@ -274,6 +277,7 @@ export async function crearPedido(data: {
         ? data.monto_efectivo_recibido - total
         : null,
     valor_domicilio: valorDomicilio,
+    propina,
     subtotal,
     total,
     estado: "pendiente_confirmacion_cajera",
@@ -312,6 +316,7 @@ export async function crearPedido(data: {
         monto_efectivo_recibido: pedido.monto_efectivo_recibido,
         vuelto: pedido.vuelto,
         valor_domicilio: pedido.valor_domicilio,
+        propina: pedido.propina,
         subtotal: pedido.subtotal,
         total: pedido.total,
         estado: pedido.estado,

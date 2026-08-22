@@ -69,6 +69,7 @@ async function consultarComanda(comanda: string, telefono: string): Promise<Pedi
         p["monto_efectivo_recibido"] != null ? Number(p["monto_efectivo_recibido"]) : null,
       vuelto: p["vuelto"] != null ? Number(p["vuelto"]) : null,
       valor_domicilio: Number(p["valor_domicilio"] ?? 0),
+      propina: Number(p["propina"] ?? 0),
       subtotal: Number(p["subtotal"] ?? 0),
       total: Number(p["total"] ?? 0),
       estado: p["estado"] as Pedido["estado"],
@@ -287,6 +288,12 @@ function Confirmacion() {
           <span>Domicilio</span>
           <span className="text-primary">{formatCOP(pedido.valor_domicilio)}</span>
         </div>
+        {pedido.propina > 0 && (
+          <div className="flex justify-between pt-1 text-sm">
+            <span>Propina domiciliario</span>
+            <span className="text-primary">{formatCOP(pedido.propina)}</span>
+          </div>
+        )}
         <div className="flex justify-between font-display text-2xl">
           <span>Total</span>
           <span className="text-primary">{formatCOP(pedido.total)}</span>

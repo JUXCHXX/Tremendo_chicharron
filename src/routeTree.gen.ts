@@ -309,8 +309,9 @@ const DomiciliarioRouteChildren: DomiciliarioRouteChildren = {
   DomiciliarioLoginRoute: DomiciliarioLoginRoute,
 }
 
-const DomiciliarioRouteWithChildren =
-  DomiciliarioRoute._addFileChildren(DomiciliarioRouteChildren)
+const DomiciliarioRouteWithChildren = DomiciliarioRoute._addFileChildren(
+  DomiciliarioRouteChildren,
+)
 
 interface PedidoRouteChildren {
   PedidoNumero_comandaRoute: typeof PedidoNumero_comandaRoute

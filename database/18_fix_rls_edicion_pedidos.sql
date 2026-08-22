@@ -182,6 +182,7 @@ begin
       new.subtotal <> old.subtotal
       or new.total <> old.total
       or new.valor_domicilio <> old.valor_domicilio
+      or new.propina is distinct from old.propina
       or new.cliente_nombre <> old.cliente_nombre
       or new.cliente_telefono <> old.cliente_telefono
       or new.direccion_entrega <> old.direccion_entrega
@@ -284,9 +285,9 @@ begin
     v_subtotal := v_subtotal + (v_item->>'cantidad')::numeric * (v_item->>'precio_unitario')::numeric;
   end loop;
 
-  v_total := v_subtotal + coalesce(p_valor_domicilio, v_pedido.valor_domicilio);
+  v_total := v_subtotal + coalesce(p_valor_domicilio, v_pedido.valor_domicilio) + v_pedido.propina;
 
-  -- Actualizar pedido (sube versión → el trigger archiva la anterior).
+  -- Actualizar pedido (sube versión → el trigger archiva el anterior).
   update public.pedidos
      set subtotal = v_subtotal,
          total = v_total,

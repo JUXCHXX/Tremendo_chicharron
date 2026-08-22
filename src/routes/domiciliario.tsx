@@ -1,4 +1,11 @@
-import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  redirect,
+  useLocation,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   LogOut,
@@ -39,6 +46,7 @@ export const Route = createFileRoute("/domiciliario")({
 
 function Domiciliario() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [perfil, setPerfil] = useState<DomiciliarioDb | null>(null);
   const [cargandoPerfil, setCargandoPerfil] = useState(true);
   const [numeroComanda, setNumeroComanda] = useState("");
@@ -53,27 +61,47 @@ function Domiciliario() {
   // Cargar perfil del domiciliario autenticado
   useEffect(() => {
     const cargarPerfil = async () => {
+      // Si estamos en /domiciliario/login, el componente hijo (login) se
+      // encarga de la UI. No ejecutar la lógica de redirección aquí para
+      // evitar un loop infinito de recarga.
+      if (location.pathname.endsWith("/login")) {
+        setCargandoPerfil(false);
+        return;
+      }
       if (!supabase) {
         setCargandoPerfil(false);
         return;
       }
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) {
-        setCargandoPerfil(false);
+      // getSession() es síncrono (lee de localStorage), no hace round-trip
+      // al servidor y no se cuelga como getUser().
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id;
+      // Sin sesión activa → redirigir al login (es lo normal, no un error).
+      // Usamos window.location.assign para forzar una navegación completa
+      // y evitar loops del router. NO hacemos await en signOut.
+      if (!userId) {
+        void cerrarSesionDomiciliario();
+        window.location.assign("/domiciliario/login");
         return;
       }
       const { data, error } = await supabase
         .from("domiciliarios")
         .select("*")
-        .eq("user_id", userData.user.id)
+        .eq("user_id", userId)
         .single();
       if (!error && data) {
         setPerfil(data as DomiciliarioDb);
+      } else {
+        // Sesión activa pero sin perfil de domiciliario → cerrar sesión
+        // y redirigir al login limpio (no dejar al usuario atascado).
+        void cerrarSesionDomiciliario();
+        window.location.assign("/domiciliario/login");
+        return;
       }
       setCargandoPerfil(false);
     };
     void cargarPerfil();
-  }, []);
+  }, [location.pathname]);
 
   // Pedidos asignados a este domiciliario (Realtime)
   const { pedidos, recargar } = usePedidosRealtime({ staff: true });
@@ -184,6 +212,12 @@ function Domiciliario() {
     await cerrarSesionDomiciliario();
     void navigate({ to: "/domiciliario/login" });
   };
+
+  // Si estamos en /domiciliario/login, renderizar el hijo (login) directamente.
+  // El componente padre no debe mostrar spinner ni error en esta ruta.
+  if (location.pathname.endsWith("/login")) {
+    return <Outlet />;
+  }
 
   if (cargandoPerfil) {
     return (

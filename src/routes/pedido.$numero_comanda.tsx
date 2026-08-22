@@ -127,6 +127,7 @@ function ConsultarPedido() {
             : null,
         vuelto: pedidoObj["vuelto"] != null ? Number(pedidoObj["vuelto"]) : null,
         valor_domicilio: Number(pedidoObj["valor_domicilio"] ?? 0),
+        propina: Number(pedidoObj["propina"] ?? 0),
         subtotal: Number(pedidoObj["subtotal"] ?? 0),
         total: Number(pedidoObj["total"] ?? 0),
         estado: pedidoObj["estado"] as Pedido["estado"],
@@ -248,6 +249,12 @@ function DetallePedido({ pedido }: { pedido: Pedido }) {
           <span>Domicilio</span>
           <span>{formatCOP(pedido.valor_domicilio)}</span>
         </div>
+        {pedido.propina > 0 && (
+          <div className="flex justify-between pt-1">
+            <span>Propina domiciliario</span>
+            <span>{formatCOP(pedido.propina)}</span>
+          </div>
+        )}
         <div className="flex justify-between font-display text-2xl">
           <span>Total</span>
           <span className="text-primary">{formatCOP(pedido.total)}</span>

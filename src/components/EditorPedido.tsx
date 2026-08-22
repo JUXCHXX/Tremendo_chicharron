@@ -22,7 +22,7 @@ export function EditorPedido({ pedido, telefonoCliente, onGuardado, onCancelar }
   const [exito, setExito] = useState(false);
 
   const subtotal = useMemo(() => calcularSubtotal(items), [items]);
-  const total = subtotal + valorDomicilio;
+  const total = subtotal + valorDomicilio + pedido.propina;
 
   // Si el estado del pedido cambió a en_cocina mientras se está editando,
   // cerramos la edición automáticamente (regla de negocio punto 19).
@@ -259,6 +259,12 @@ export function EditorPedido({ pedido, telefonoCliente, onGuardado, onCancelar }
           <span>Subtotal</span>
           <span className="text-primary">{formatCOP(subtotal)}</span>
         </div>
+        {pedido.propina > 0 && (
+          <div className="mt-1 flex justify-between">
+            <span>Propina domiciliario</span>
+            <span className="text-primary">{formatCOP(pedido.propina)}</span>
+          </div>
+        )}
         <div className="mt-1 flex justify-between border-t border-border pt-2 font-display text-2xl">
           <span>Total</span>
           <span className="text-primary">{formatCOP(total)}</span>
