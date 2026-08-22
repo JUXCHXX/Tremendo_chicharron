@@ -16,6 +16,7 @@ import {
   Pencil,
   Trash2,
   ImagePlus,
+  Coins,
 } from "lucide-react";
 import { estaAutenticado, cerrarSesion } from "@/lib/auth-staff";
 import { formatCOP } from "@/lib/menu-data";
@@ -78,7 +79,7 @@ function SuperAdmin() {
   const navigate = useNavigate();
   const { categorias, productos, promociones, recargar } = useMenuData();
   const config = useStore((s) => s.config);
-  const [tab, setTab] = useState<"menu" | "estadisticas" | "promos">("menu");
+  const [tab, setTab] = useState<"menu" | "estadisticas" | "promos" | "propinas">("menu");
   const [editandoProducto, setEditandoProducto] = useState<ProductoDb | null>(null);
   const [creandoProducto, setCreandoProducto] = useState(false);
   const [editandoPromo, setEditandoPromo] = useState<PromocionDb | null>(null);
@@ -302,7 +303,7 @@ function SuperAdmin() {
       )}
 
       <div className="flex gap-2">
-        {(["menu", "estadisticas", "promos"] as const).map((t) => (
+        {(["menu", "estadisticas", "promos", "propinas"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -310,7 +311,13 @@ function SuperAdmin() {
               tab === t ? "bg-brasa text-primary-foreground" : "border border-border bg-card"
             }`}
           >
-            {t === "menu" ? "Menú" : t === "estadisticas" ? "Estadísticas" : "Promociones"}
+            {t === "menu"
+              ? "Menú"
+              : t === "estadisticas"
+                ? "Estadísticas"
+                : t === "promos"
+                  ? "Promociones"
+                  : "Propinas"}
           </button>
         ))}
       </div>
@@ -376,6 +383,8 @@ function SuperAdmin() {
       )}
 
       {tab === "estadisticas" && <Estadisticas />}
+
+      {tab === "propinas" && <PropinasDomiciliarios />}
 
       {tab === "promos" && (
         <div className="mt-5">
@@ -515,6 +524,166 @@ function Estadisticas() {
           <FileText className="size-4" /> Exportar PDF
         </button>
       </div>
+    </div>
+  );
+}
+
+function PropinasDomiciliarios() {
+  const [propinas, setPropinas] = useState<
+    {
+      domiciliario_id: string;
+      nombre_completo: string;
+      dia: string;
+      pedidos_entregados: number;
+      total_propinas: number;
+    }[]
+  >([]);
+  const [cargando, setCargando] = useState(true);
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
+
+  const cargarPropinas = async () => {
+    if (!supabase) {
+      setCargando(false);
+      return;
+    }
+    setCargando(true);
+    try {
+      let query = supabase
+        .from("propinas_por_domiciliario")
+        .select("*")
+        .order("dia", { ascending: false });
+      if (fechaDesde) {
+        query = query.gte("dia", `${fechaDesde}T00:00:00`);
+      }
+      if (fechaHasta) {
+        query = query.lte("dia", `${fechaHasta}T23:59:59`);
+      }
+      const { data, error } = await query;
+      if (!error && data) {
+        setPropinas(data as typeof propinas);
+      }
+    } catch (e) {
+      console.error("Error cargando propinas:", e);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => {
+    void cargarPropinas();
+  }, [fechaDesde, fechaHasta]);
+
+  // Agrupar por domiciliario para el total acumulado
+  const porDomiciliario = new Map<string, { nombre: string; total: number; pedidos: number }>();
+  propinas.forEach((p) => {
+    const actual = porDomiciliario.get(p.domiciliario_id) ?? {
+      nombre: p.nombre_completo,
+      total: 0,
+      pedidos: 0,
+    };
+    actual.total += p.total_propinas;
+    actual.pedidos += p.pedidos_entregados;
+    porDomiciliario.set(p.domiciliario_id, actual);
+  });
+
+  return (
+    <div className="mt-5 space-y-5">
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="block">
+          <span className="text-xs tracking-widest text-muted-foreground uppercase">Desde</span>
+          <input
+            type="date"
+            value={fechaDesde}
+            onChange={(e) => setFechaDesde(e.target.value)}
+            className="mt-1 rounded-xl bg-input px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs tracking-widest text-muted-foreground uppercase">Hasta</span>
+          <input
+            type="date"
+            value={fechaHasta}
+            onChange={(e) => setFechaHasta(e.target.value)}
+            className="mt-1 rounded-xl bg-input px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        </label>
+        {(fechaDesde || fechaHasta) && (
+          <button
+            onClick={() => {
+              setFechaDesde("");
+              setFechaHasta("");
+            }}
+            className="rounded-xl border border-border px-3 py-2 text-xs text-muted-foreground hover:text-primary"
+          >
+            Limpiar filtros
+          </button>
+        )}
+      </div>
+
+      {cargando ? (
+        <p className="text-sm text-muted-foreground">Cargando propinas…</p>
+      ) : porDomiciliario.size === 0 ? (
+        <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+          No hay propinas registradas en el rango seleccionado.
+        </p>
+      ) : (
+        <>
+          {/* Resumen por domiciliario */}
+          <div className="grid gap-3 md:grid-cols-2">
+            {[...porDomiciliario.entries()].map(([id, d]) => (
+              <div
+                key={id}
+                className="rounded-2xl border border-primary/25 bg-card p-4 shadow-card"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex size-10 items-center justify-center rounded-full bg-primary/15">
+                    <Coins className="size-5 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold">{d.nombre}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {d.pedidos} pedido{d.pedidos !== 1 ? "s" : ""} entregado
+                      {d.pedidos !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <p className="font-display text-3xl text-primary">{formatCOP(d.total)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Detalle por día */}
+          <section className="rounded-2xl border border-border bg-card p-4">
+            <h2 className="font-display text-2xl text-primary">Detalle por día</h2>
+            <div className="mt-3 space-y-2">
+              {propinas.map((p) => (
+                <div
+                  key={`${p.domiciliario_id}-${p.dia}`}
+                  className="flex items-center justify-between rounded-xl border border-border px-4 py-2 text-sm"
+                >
+                  <div>
+                    <p className="font-semibold">{p.nombre_completo}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(p.dia).toLocaleDateString("es-CO", {
+                        weekday: "long",
+                        day: "numeric",
+                        month: "long",
+                      })}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-primary">{formatCOP(p.total_propinas)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {p.pedidos_entregados} pedido{p.pedidos_entregados !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }

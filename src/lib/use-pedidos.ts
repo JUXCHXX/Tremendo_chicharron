@@ -44,6 +44,11 @@ export interface PedidoDb {
   version: number;
   creado_en: string;
   editable_hasta: string;
+  domiciliario_id: string | null;
+  propina: number;
+  asignado_en: string | null;
+  en_camino_en: string | null;
+  entregado_en: string | null;
   items?: PedidoItemNormalizado[];
 }
 

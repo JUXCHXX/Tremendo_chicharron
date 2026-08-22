@@ -6,7 +6,7 @@ import {
   useLocation,
   Outlet,
 } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Printer,
   RefreshCcw,
@@ -21,6 +21,7 @@ import {
   Phone,
   MapPin,
   StickyNote,
+  Bike,
 } from "lucide-react";
 import {
   DndContext,
@@ -115,6 +116,23 @@ function Admin() {
   const [errorAccion, setErrorAccion] = useState("");
   const [busquedaComanda, setBusquedaComanda] = useState("");
   const [detalleId, setDetalleId] = useState<string | null>(null);
+  const [domiciliarios, setDomiciliarios] = useState<Record<string, string>>({});
+
+  // Cargar domiciliarios para mostrar el nombre en las tarjetas
+  useEffect(() => {
+    const cargarDomiciliarios = async () => {
+      if (!supabase) return;
+      const { data, error } = await supabase.from("domiciliarios").select("id, nombre_completo");
+      if (!error && data) {
+        const map: Record<string, string> = {};
+        data.forEach((d) => {
+          map[d.id] = d.nombre_completo;
+        });
+        setDomiciliarios(map);
+      }
+    };
+    void cargarDomiciliarios();
+  }, []);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -349,6 +367,7 @@ function Admin() {
                       onSetDomicilio={setDomicilioDb}
                       cambiandoId={cambiandoId}
                       onVerDetalle={(id) => setDetalleId(id)}
+                      domiciliarios={domiciliarios}
                     />
                   );
                 })}
@@ -361,6 +380,7 @@ function Admin() {
                     onSetDomicilio={setDomicilioDb}
                     cambiandoId={cambiandoId}
                     overlay
+                    domiciliarios={domiciliarios}
                   />
                 ) : null}
               </DragOverlay>
@@ -460,6 +480,7 @@ function KanbanColumna({
   onSetDomicilio,
   cambiandoId,
   onVerDetalle,
+  domiciliarios,
 }: {
   estado: EstadoPedido;
   pedidos: PedidoDb[];
@@ -467,6 +488,7 @@ function KanbanColumna({
   onSetDomicilio: (id: string, valor: number, pd: PedidoDb) => void;
   cambiandoId: string | null;
   onVerDetalle: (id: string) => void;
+  domiciliarios: Record<string, string>;
 }) {
   const { setNodeRef, isOver } = useSortable({ id: estado });
   return (
@@ -492,6 +514,7 @@ function KanbanColumna({
               onSetDomicilio={onSetDomicilio}
               cambiandoId={cambiandoId}
               onVerDetalle={onVerDetalle}
+              domiciliarios={domiciliarios}
             />
           ))}
           {pedidos.length === 0 && (
@@ -512,6 +535,7 @@ function TarjetaPedido({
   cambiandoId,
   onVerDetalle,
   overlay = false,
+  domiciliarios,
 }: {
   pd: PedidoDb;
   onCambiarEstado: (id: string, estado: string) => void;
@@ -519,6 +543,7 @@ function TarjetaPedido({
   cambiandoId: string | null;
   onVerDetalle?: (id: string) => void;
   overlay?: boolean;
+  domiciliarios: Record<string, string>;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: pd.id,
@@ -572,6 +597,14 @@ function TarjetaPedido({
           )}
         </div>
       </div>
+
+      {/* Domiciliario asignado */}
+      {pd.domiciliario_id && domiciliarios[pd.domiciliario_id] && (
+        <p className="mt-2 flex items-center gap-1 rounded-lg bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary">
+          <Bike className="size-3 shrink-0" />
+          Domiciliario: {domiciliarios[pd.domiciliario_id]}
+        </p>
+      )}
 
       {/* Cliente */}
       <p className="mt-2 text-sm font-semibold text-foreground">{pd.cliente_nombre}</p>

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as DomiciliarioRouteImport } from './routes/domiciliario'
 import { Route as MenuRouteImport } from './routes/menu'
 import { Route as MiChicharroneraRouteImport } from './routes/mi-chicharronera'
 import { Route as PedidoRouteImport } from './routes/pedido'
@@ -18,6 +19,7 @@ import { Route as ProgresoRouteImport } from './routes/progreso'
 import { Route as SuperadminRouteImport } from './routes/superadmin'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as ConfirmacionComandaRouteImport } from './routes/confirmacion.$comanda'
+import { Route as DomiciliarioLoginRouteImport } from './routes/domiciliario.login'
 import { Route as PedidoNumero_comandaRouteImport } from './routes/pedido.$numero_comanda'
 import { Route as SuperadminLoginRouteImport } from './routes/superadmin.login'
 
@@ -29,6 +31,11 @@ const IndexRoute = IndexRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DomiciliarioRoute = DomiciliarioRouteImport.update({
+  id: '/domiciliario',
+  path: '/domiciliario',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MenuRoute = MenuRouteImport.update({
@@ -66,6 +73,11 @@ const ConfirmacionComandaRoute = ConfirmacionComandaRouteImport.update({
   path: '/confirmacion/$comanda',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DomiciliarioLoginRoute = DomiciliarioLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => DomiciliarioRoute,
+} as any)
 const PedidoNumero_comandaRoute = PedidoNumero_comandaRouteImport.update({
   id: '/$numero_comanda',
   path: '/$numero_comanda',
@@ -80,6 +92,7 @@ const SuperadminLoginRoute = SuperadminLoginRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/domiciliario': typeof DomiciliarioRouteWithChildren
   '/menu': typeof MenuRoute
   '/mi-chicharronera': typeof MiChicharroneraRoute
   '/pedido': typeof PedidoRouteWithChildren
@@ -87,12 +100,14 @@ export interface FileRoutesByFullPath {
   '/superadmin': typeof SuperadminRouteWithChildren
   '/admin/login': typeof AdminLoginRoute
   '/confirmacion/$comanda': typeof ConfirmacionComandaRoute
+  '/domiciliario/login': typeof DomiciliarioLoginRoute
   '/pedido/$numero_comanda': typeof PedidoNumero_comandaRoute
   '/superadmin/login': typeof SuperadminLoginRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/domiciliario': typeof DomiciliarioRouteWithChildren
   '/menu': typeof MenuRoute
   '/mi-chicharronera': typeof MiChicharroneraRoute
   '/pedido': typeof PedidoRouteWithChildren
@@ -100,6 +115,7 @@ export interface FileRoutesByTo {
   '/superadmin': typeof SuperadminRouteWithChildren
   '/admin/login': typeof AdminLoginRoute
   '/confirmacion/$comanda': typeof ConfirmacionComandaRoute
+  '/domiciliario/login': typeof DomiciliarioLoginRoute
   '/pedido/$numero_comanda': typeof PedidoNumero_comandaRoute
   '/superadmin/login': typeof SuperadminLoginRoute
 }
@@ -107,6 +123,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/domiciliario': typeof DomiciliarioRouteWithChildren
   '/menu': typeof MenuRoute
   '/mi-chicharronera': typeof MiChicharroneraRoute
   '/pedido': typeof PedidoRouteWithChildren
@@ -114,6 +131,7 @@ export interface FileRoutesById {
   '/superadmin': typeof SuperadminRouteWithChildren
   '/admin/login': typeof AdminLoginRoute
   '/confirmacion/$comanda': typeof ConfirmacionComandaRoute
+  '/domiciliario/login': typeof DomiciliarioLoginRoute
   '/pedido/$numero_comanda': typeof PedidoNumero_comandaRoute
   '/superadmin/login': typeof SuperadminLoginRoute
 }
@@ -122,6 +140,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/domiciliario'
     | '/menu'
     | '/mi-chicharronera'
     | '/pedido'
@@ -129,12 +148,14 @@ export interface FileRouteTypes {
     | '/superadmin'
     | '/admin/login'
     | '/confirmacion/$comanda'
+    | '/domiciliario/login'
     | '/pedido/$numero_comanda'
     | '/superadmin/login'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/admin'
+    | '/domiciliario'
     | '/menu'
     | '/mi-chicharronera'
     | '/pedido'
@@ -142,12 +163,14 @@ export interface FileRouteTypes {
     | '/superadmin'
     | '/admin/login'
     | '/confirmacion/$comanda'
+    | '/domiciliario/login'
     | '/pedido/$numero_comanda'
     | '/superadmin/login'
   id:
     | '__root__'
     | '/'
     | '/admin'
+    | '/domiciliario'
     | '/menu'
     | '/mi-chicharronera'
     | '/pedido'
@@ -155,6 +178,7 @@ export interface FileRouteTypes {
     | '/superadmin'
     | '/admin/login'
     | '/confirmacion/$comanda'
+    | '/domiciliario/login'
     | '/pedido/$numero_comanda'
     | '/superadmin/login'
   fileRoutesById: FileRoutesById
@@ -162,6 +186,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
+  DomiciliarioRoute: typeof DomiciliarioRouteWithChildren
   MenuRoute: typeof MenuRoute
   MiChicharroneraRoute: typeof MiChicharroneraRoute
   PedidoRoute: typeof PedidoRouteWithChildren
@@ -184,6 +209,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/domiciliario': {
+      id: '/domiciliario'
+      path: '/domiciliario'
+      fullPath: '/domiciliario'
+      preLoaderRoute: typeof DomiciliarioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/menu': {
@@ -235,6 +267,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfirmacionComandaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/domiciliario/login': {
+      id: '/domiciliario/login'
+      path: '/login'
+      fullPath: '/domiciliario/login'
+      preLoaderRoute: typeof DomiciliarioLoginRouteImport
+      parentRoute: typeof DomiciliarioRoute
+    }
     '/pedido/$numero_comanda': {
       id: '/pedido/$numero_comanda'
       path: '/$numero_comanda'
@@ -262,6 +301,17 @@ const AdminRouteChildren: AdminRouteChildren = {
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
+interface DomiciliarioRouteChildren {
+  DomiciliarioLoginRoute: typeof DomiciliarioLoginRoute
+}
+
+const DomiciliarioRouteChildren: DomiciliarioRouteChildren = {
+  DomiciliarioLoginRoute: DomiciliarioLoginRoute,
+}
+
+const DomiciliarioRouteWithChildren =
+  DomiciliarioRoute._addFileChildren(DomiciliarioRouteChildren)
+
 interface PedidoRouteChildren {
   PedidoNumero_comandaRoute: typeof PedidoNumero_comandaRoute
 }
@@ -288,6 +338,7 @@ const SuperadminRouteWithChildren = SuperadminRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
+  DomiciliarioRoute: DomiciliarioRouteWithChildren,
   MenuRoute: MenuRoute,
   MiChicharroneraRoute: MiChicharroneraRoute,
   PedidoRoute: PedidoRouteWithChildren,
