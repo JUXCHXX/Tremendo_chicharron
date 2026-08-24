@@ -147,11 +147,13 @@ export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: bo
       .subscribe();
 
     // Polling de respaldo: en celular/redes inestables Realtime puede no
-    // notificar. Recargamos cada 15s para que el cliente SIEMPRE vea el
-    // estado actualizado de su pedido (Mi Chicharronera).
+    // notificar, y para clientes anónimos Realtime no funciona (la política
+    // pedidos_select_anon exige header x-cliente-telefono que Realtime no
+    // puede enviar). Recargamos cada 5s para que el cliente SIEMPRE vea el
+    // estado actualizado de su pedido (Mi Chicharronera) casi en tiempo real.
     const intervalo = setInterval(() => {
       void cargar();
-    }, 15_000);
+    }, 5_000);
 
     return () => {
       void sb.removeChannel(channel);
