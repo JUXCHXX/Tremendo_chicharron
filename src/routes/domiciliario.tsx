@@ -197,13 +197,15 @@ function Domiciliario() {
         .update(updates)
         .eq("id", pd.id)
         .select("id, estado")
-        .single();
+        .maybeSingle();
       if (error) {
         setError(error.message);
         return;
       }
       if (!updated || updated.estado !== nuevoEstado) {
-        setError("La base de datos no confirmó el cambio de estado.");
+        setError(
+          "La base de datos no confirmó el cambio de estado. Verifica que el pedido siga asignado a tu perfil activo.",
+        );
         return;
       }
       setExito(

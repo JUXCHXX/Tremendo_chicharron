@@ -142,7 +142,20 @@ $$;
 revoke all on function public.consultar_pedidos_por_telefono(text) from public;
 grant execute on function public.consultar_pedidos_por_telefono(text) to anon, authenticated;
 
--- ── 4) RLS SOLO PARA ESTADOS POSTERIORES A LA ASIGNACIÓN ────────────────────
+-- ── 4) RLS STAFF: ACTUALIZACIÓN DE PEDIDOS ───────────────────────────────────
+-- El estado puede avanzar desde Caja en cualquier transición válida. La
+-- protección de que el contenido no cambie después de cocina permanece en los
+-- triggers de edición del esquema 18; no debe duplicarse aquí mediante una
+-- función que vuelva a leer pedidos dentro de la política.
+drop policy if exists pedidos_update_staff on public.pedidos;
+create policy pedidos_update_staff
+on public.pedidos
+for update
+to authenticated
+using (public.es_staff(auth.uid()))
+with check (public.es_staff(auth.uid()));
+
+-- ── 5) RLS SOLO PARA ESTADOS POSTERIORES A LA ASIGNACIÓN ────────────────────
 drop policy if exists pedidos_update_domiciliario on public.pedidos;
 create policy pedidos_update_domiciliario
 on public.pedidos
@@ -166,5 +179,5 @@ with check (
   and estado in ('en_camino', 'entregado')
 );
 
--- ── 5) ELIMINAR VISTA DE SEGUIMIENTO NO UTILIZADA ───────────────────────────
+-- ── 6) ELIMINAR VISTA DE SEGUIMIENTO NO UTILIZADA ───────────────────────────
 drop view if exists public.pedidos_seguimiento;

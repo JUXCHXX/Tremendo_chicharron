@@ -149,12 +149,22 @@ function Admin() {
     setCambiandoId(id);
     setErrorAccion("");
     try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        throw new Error("La sesión de Caja no está vigente. Inicia sesión nuevamente.");
+      }
+      const { data: staffActivo, error: staffError } = await supabase.rpc("es_staff", {
+        _user_id: authData.user.id,
+      });
+      if (staffError || staffActivo !== true) {
+        throw new Error("La sesión actual no tiene un rol staff válido.");
+      }
       const { data: updated, error: updateError } = await supabase
         .from("pedidos")
         .update({ estado })
         .eq("id", id)
         .select("id, estado")
-        .single();
+        .maybeSingle();
       if (updateError) {
         throw new Error(`No se pudo actualizar el estado (${updateError.message}).`);
       }
