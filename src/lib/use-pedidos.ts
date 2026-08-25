@@ -55,6 +55,7 @@ export interface PedidoDb {
 export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: boolean }) {
   const [pedidos, setPedidos] = useState<PedidoDb[]>([]);
   const [cargando, setCargando] = useState(true);
+  const pedidosRef = useRef<PedidoDb[]>([]);
 
   // Overrides locales: pedidos cuyo estado la cajera cambió en esta sesión.
   // Se aplican SIEMPRE por encima de lo que devuelva el servidor, para que la
@@ -125,6 +126,7 @@ export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: bo
         }
         return pedidoNormalizado;
       });
+      pedidosRef.current = conItems;
       setPedidos(conItems);
     } else if (error) {
       console.error("Error cargando pedidos:", error);
@@ -136,30 +138,24 @@ export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: bo
     void cargar();
 
     if (!supabase) return;
-    const sb = supabase;
-
-    // Suscripción Realtime a la tabla pedidos
-    const channel = sb
-      .channel("pedidos-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "pedidos" }, () => {
-        void cargar();
-      })
-      .subscribe();
-
-    // Polling de respaldo: en celular/redes inestables Realtime puede no
-    // notificar, y para clientes anónimos Realtime no funciona (la política
-    // pedidos_select_anon exige header x-cliente-telefono que Realtime no
-    // puede enviar). Recargamos cada 5s para que el cliente SIEMPRE vea el
-    // estado actualizado de su pedido (Mi Chicharronera) casi en tiempo real.
+    // Estrategia única de seguimiento: polling por REST con el header
+    // x-cliente-telefono. Realtime anónimo no puede satisfacer esa política.
+    // Staff continúa consultando por polling para conservar el mismo modelo.
     const intervalo = setInterval(() => {
-      void cargar();
-    }, 5_000);
+      const hayPedidosActivos = pedidosRef.current.some(
+        (p) => p.estado !== "entregado" && p.estado !== "cancelado",
+      );
+      if (opts?.staff || !opts?.telefono || hayPedidosActivos || pedidosRef.current.length === 0) {
+        void cargar();
+      } else {
+        clearInterval(intervalo);
+      }
+    }, 4_000);
 
     return () => {
-      void sb.removeChannel(channel);
       clearInterval(intervalo);
     };
-  }, [cargar]);
+  }, [cargar, opts?.staff, opts?.telefono]);
 
   return { pedidos, cargando, recargar: cargar, actualizarLocal };
 }

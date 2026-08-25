@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Search, MessageCircle, Printer } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { supabase } from "@/lib/supabase";
@@ -31,47 +30,30 @@ function ConsultarPedido() {
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
   const [consultado, setConsultado] = useState(false);
-  const pedidoIdRef = useRef<string | null>(null);
-  const channelRef = useRef<RealtimeChannel | null>(null);
-
-  // Suscripción Realtime: cuando la cajera actualiza el pedido (estado, domicilio, total),
-  // el cliente ve el cambio sin recargar la página.
+  // Estrategia única: polling por la RPC segura. La RPC valida comanda y
+  // teléfono sin exponer pedidos ajenos y sí puede usar el header esperado.
   useEffect(() => {
-    if (!supabase || !pedidoIdRef.current) return;
+    if (!supabase || !pedido || !telefono.trim()) return;
+    if (pedido.estado === "entregado" || pedido.estado === "cancelado") return;
 
-    const channel = supabase
-      .channel(`pedido-${pedidoIdRef.current}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "pedidos",
-          filter: `id=eq.${pedidoIdRef.current}`,
-        },
-        (payload) => {
-          const nuevo = payload.new as Record<string, unknown>;
-          setPedido((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              estado: (nuevo["estado"] as Pedido["estado"]) ?? prev.estado,
-              valor_domicilio: Number(nuevo["valor_domicilio"] ?? prev.valor_domicilio),
-              total: Number(nuevo["total"] ?? prev.total),
-              vuelto: nuevo["vuelto"] != null ? Number(nuevo["vuelto"]) : prev.vuelto,
-            };
-          });
-        },
-      )
-      .subscribe();
-
-    channelRef.current = channel;
-    const canal = channel;
-    return () => {
-      if (supabase) void supabase.removeChannel(canal);
-      channelRef.current = null;
+    let activo = true;
+    const actualizar = async () => {
+      const { data, error: err } = await supabase.rpc("consultar_pedido_por_comanda_y_telefono", {
+        p_numero_comanda: numero_comanda,
+        p_telefono: telefono.trim(),
+      });
+      if (!activo || err || !data) return;
+      const pedidoRaw = (data as { pedido: Record<string, unknown> }).pedido;
+      const itemsRaw = (data as { items?: Record<string, unknown>[] }).items ?? [];
+      setPedido(convertirPedido(pedidoRaw, itemsRaw));
     };
-  }, [pedido?.id]);
+
+    const intervalo = setInterval(() => void actualizar(), 4_000);
+    return () => {
+      activo = false;
+      clearInterval(intervalo);
+    };
+  }, [numero_comanda, pedido, pedido?.id, pedido?.estado, telefono]);
 
   async function consultar() {
     if (telefono.trim().length < 7) {
@@ -109,43 +91,7 @@ function ConsultarPedido() {
       ).items;
       const pedidoObj = pedidoRaw as unknown as Record<string, unknown>;
 
-      pedidoIdRef.current = String(pedidoObj["id"]);
-
-      const pedidoCompleto: Pedido = {
-        id: String(pedidoObj["id"]),
-        numero_comanda: String(pedidoObj["numero_comanda"]),
-        cliente_nombre: String(pedidoObj["cliente_nombre"]),
-        cliente_telefono: String(pedidoObj["cliente_telefono"]),
-        direccion_entrega: String(pedidoObj["direccion_entrega"]),
-        barrio: pedidoObj["barrio"] != null ? String(pedidoObj["barrio"]) : null,
-        latitud: pedidoObj["latitud"] != null ? Number(pedidoObj["latitud"]) : null,
-        longitud: pedidoObj["longitud"] != null ? Number(pedidoObj["longitud"]) : null,
-        medio_pago: pedidoObj["medio_pago"] as Pedido["medio_pago"],
-        monto_efectivo_recibido:
-          pedidoObj["monto_efectivo_recibido"] != null
-            ? Number(pedidoObj["monto_efectivo_recibido"])
-            : null,
-        vuelto: pedidoObj["vuelto"] != null ? Number(pedidoObj["vuelto"]) : null,
-        valor_domicilio: Number(pedidoObj["valor_domicilio"] ?? 0),
-        propina: Number(pedidoObj["propina"] ?? 0),
-        subtotal: Number(pedidoObj["subtotal"] ?? 0),
-        total: Number(pedidoObj["total"] ?? 0),
-        estado: pedidoObj["estado"] as Pedido["estado"],
-        creado_en: String(pedidoObj["creado_en"]),
-        editable_hasta: String(pedidoObj["editable_hasta"]),
-        version: Number(pedidoObj["version"] ?? 1),
-        items: (itemsRaw ?? []).map((i: Record<string, unknown>): Pedido["items"][number] => ({
-          key: String(i["id"]),
-          producto_id: i["producto_id"] ? String(i["producto_id"]) : "",
-          nombre: String(i["nombre_producto"]),
-          cantidad: Number(i["cantidad"] ?? 0),
-          variante_personas: i["variante_personas"] != null ? Number(i["variante_personas"]) : null,
-          notas: String(i["notas"] ?? ""),
-          precio_unitario: Number(i["precio_unitario"] ?? 0),
-          combo: Boolean(i["combo"]),
-        })),
-      };
-      setPedido(pedidoCompleto);
+      setPedido(convertirPedido(pedidoObj, itemsRaw));
       setConsultado(true);
     } catch {
       setError("Ocurrió un error al consultar. Intenta de nuevo.");
@@ -192,6 +138,46 @@ function ConsultarPedido() {
       {pedido && <DetallePedido pedido={pedido} />}
     </main>
   );
+}
+
+function convertirPedido(
+  pedidoObj: Record<string, unknown>,
+  itemsRaw: Record<string, unknown>[],
+): Pedido {
+  return {
+    id: String(pedidoObj["id"]),
+    numero_comanda: String(pedidoObj["numero_comanda"]),
+    cliente_nombre: String(pedidoObj["cliente_nombre"]),
+    cliente_telefono: String(pedidoObj["cliente_telefono"]),
+    direccion_entrega: String(pedidoObj["direccion_entrega"]),
+    barrio: pedidoObj["barrio"] != null ? String(pedidoObj["barrio"]) : null,
+    latitud: pedidoObj["latitud"] != null ? Number(pedidoObj["latitud"]) : null,
+    longitud: pedidoObj["longitud"] != null ? Number(pedidoObj["longitud"]) : null,
+    medio_pago: pedidoObj["medio_pago"] as Pedido["medio_pago"],
+    monto_efectivo_recibido:
+      pedidoObj["monto_efectivo_recibido"] != null
+        ? Number(pedidoObj["monto_efectivo_recibido"])
+        : null,
+    vuelto: pedidoObj["vuelto"] != null ? Number(pedidoObj["vuelto"]) : null,
+    valor_domicilio: Number(pedidoObj["valor_domicilio"] ?? 0),
+    propina: Number(pedidoObj["propina"] ?? 0),
+    subtotal: Number(pedidoObj["subtotal"] ?? 0),
+    total: Number(pedidoObj["total"] ?? 0),
+    estado: pedidoObj["estado"] as Pedido["estado"],
+    creado_en: String(pedidoObj["creado_en"]),
+    editable_hasta: String(pedidoObj["editable_hasta"]),
+    version: Number(pedidoObj["version"] ?? 1),
+    items: itemsRaw.map((i): Pedido["items"][number] => ({
+      key: String(i["id"]),
+      producto_id: i["producto_id"] ? String(i["producto_id"]) : "",
+      nombre: String(i["nombre_producto"]),
+      cantidad: Number(i["cantidad"] ?? 0),
+      variante_personas: i["variante_personas"] != null ? Number(i["variante_personas"]) : null,
+      notas: String(i["notas"] ?? ""),
+      precio_unitario: Number(i["precio_unitario"] ?? 0),
+      combo: Boolean(i["combo"]),
+    })),
+  };
 }
 
 function DetallePedido({ pedido }: { pedido: Pedido }) {
