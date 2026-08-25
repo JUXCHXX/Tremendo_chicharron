@@ -192,9 +192,18 @@ function Domiciliario() {
       } else if (nuevoEstado === "entregado") {
         updates["entregado_en"] = new Date().toISOString();
       }
-      const { error } = await supabase.from("pedidos").update(updates).eq("id", pd.id);
+      const { data: updated, error } = await supabase
+        .from("pedidos")
+        .update(updates)
+        .eq("id", pd.id)
+        .select("id, estado")
+        .single();
       if (error) {
         setError(error.message);
+        return;
+      }
+      if (!updated || updated.estado !== nuevoEstado) {
+        setError("La base de datos no confirmó el cambio de estado.");
         return;
       }
       setExito(

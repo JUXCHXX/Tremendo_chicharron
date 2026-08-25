@@ -107,7 +107,42 @@ $$;
 revoke all on function public.asignar_pedido_a_domiciliario(text) from public;
 grant execute on function public.asignar_pedido_a_domiciliario(text) to authenticated;
 
--- ── 3) RLS SOLO PARA ESTADOS POSTERIORES A LA ASIGNACIÓN ────────────────────
+-- ── 3) RPC SEGURA PARA POLLING DE TODOS LOS PEDIDOS DEL CLIENTE ─────────────
+-- Mi Chicharronera necesita listar varias comandas. Se conserva la RPC
+-- existente de consulta individual y se añade esta variante para que el
+-- polling no dependa de un SELECT anidado sujeto a varias políticas RLS.
+create or replace function public.consultar_pedidos_por_telefono(p_telefono text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'pedido', to_jsonb(p),
+        'items', coalesce(
+          (
+            select jsonb_agg(to_jsonb(i) order by i.id)
+              from public.pedido_items i
+             where i.pedido_id = p.id
+          ),
+          '[]'::jsonb
+        )
+      )
+      order by p.creado_en desc
+    ),
+    '[]'::jsonb
+  )
+    from public.pedidos p
+   where p.cliente_telefono = p_telefono;
+$$;
+
+revoke all on function public.consultar_pedidos_por_telefono(text) from public;
+grant execute on function public.consultar_pedidos_por_telefono(text) to anon, authenticated;
+
+-- ── 4) RLS SOLO PARA ESTADOS POSTERIORES A LA ASIGNACIÓN ────────────────────
 drop policy if exists pedidos_update_domiciliario on public.pedidos;
 create policy pedidos_update_domiciliario
 on public.pedidos
@@ -131,5 +166,5 @@ with check (
   and estado in ('en_camino', 'entregado')
 );
 
--- ── 4) ELIMINAR VISTA DE SEGUIMIENTO NO UTILIZADA ───────────────────────────
+-- ── 5) ELIMINAR VISTA DE SEGUIMIENTO NO UTILIZADA ───────────────────────────
 drop view if exists public.pedidos_seguimiento;

@@ -90,19 +90,39 @@ export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: bo
       setCargando(false);
       return;
     }
-    let query = supabase
-      .from("pedidos")
-      .select("*, pedido_items(*)")
-      .order("creado_en", { ascending: false });
+    let filas: (PedidoDb & { pedido_items: PedidoItemDb[] })[];
     if (opts?.telefono) {
-      query = query
-        .eq("cliente_telefono", opts.telefono)
-        // Header requerido por la política RLS pedidos_select_anon
-        .setHeader("x-cliente-telefono", opts.telefono);
+      const { data, error } = await supabase.rpc("consultar_pedidos_por_telefono", {
+        p_telefono: opts.telefono,
+      });
+      if (error) {
+        console.error("Error cargando pedidos del cliente:", error);
+        setCargando(false);
+        return;
+      }
+      const entradas = (Array.isArray(data) ? data : []) as {
+        pedido: PedidoDb;
+        items: PedidoItemDb[];
+      }[];
+      filas = entradas.map((entrada) => ({
+        ...entrada.pedido,
+        pedido_items: entrada.items ?? [],
+      }));
+    } else {
+      const { data, error } = await supabase
+        .from("pedidos")
+        .select("*, pedido_items(*)")
+        .order("creado_en", { ascending: false });
+      if (error || !data) {
+        console.error("Error cargando pedidos:", error);
+        setCargando(false);
+        return;
+      }
+      filas = data as (PedidoDb & { pedido_items: PedidoItemDb[] })[];
     }
-    const { data, error } = await query;
-    if (!error && data) {
-      const conItems = (data as (PedidoDb & { pedido_items: PedidoItemDb[] })[]).map((p) => {
+
+    if (filas) {
+      const conItems = filas.map((p) => {
         const pedidoNormalizado = {
           ...p,
           items: (p.pedido_items ?? []).map((i) => ({
@@ -128,8 +148,6 @@ export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: bo
       });
       pedidosRef.current = conItems;
       setPedidos(conItems);
-    } else if (error) {
-      console.error("Error cargando pedidos:", error);
     }
     setCargando(false);
   }, [opts?.telefono, opts?.staff]);

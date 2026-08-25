@@ -148,12 +148,21 @@ function Admin() {
     }
     setCambiandoId(id);
     setErrorAccion("");
-    actualizarLocal(id, { estado });
     try {
-      const { error: updateError } = await supabase.from("pedidos").update({ estado }).eq("id", id);
+      const { data: updated, error: updateError } = await supabase
+        .from("pedidos")
+        .update({ estado })
+        .eq("id", id)
+        .select("id, estado")
+        .single();
       if (updateError) {
         throw new Error(`No se pudo actualizar el estado (${updateError.message}).`);
       }
+      if (!updated || updated.estado !== estado) {
+        throw new Error("No se confirmó el cambio de estado en la base de datos.");
+      }
+      // El Kanban solo se mueve después de confirmar la fila persistida.
+      actualizarLocal(id, { estado: updated.estado });
       void recargar();
       return true;
     } catch (e) {
