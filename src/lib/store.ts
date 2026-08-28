@@ -350,26 +350,29 @@ export async function crearPedido(data: {
       });
       if (pedidoError) throw pedidoError;
 
-      // 3) Insertar items
-      // IMPORTANTE: se envía el header x-cliente-telefono porque la política
-      // RLS items_update_ventana_cliente (migración 18) exige que el cliente
-      // anónimo solo pueda insertar items de SUS propios pedidos.
-      const { error: itemsError } = await supabase
-        .from("pedido_items")
-        .insert(
-          data.items.map((i) => ({
-            pedido_id: pedido.id,
+      // 3) Guardar items mediante una RPC segura e idempotente. Así el
+      // checkout no depende de que el navegador móvil conserve un header
+      // personalizado durante el INSERT protegido por RLS.
+      const { data: itemsGuardados, error: itemsError } = await supabase.rpc(
+        "registrar_items_pedido",
+        {
+          p_pedido_id: pedido.id,
+          p_telefono: pedido.cliente_telefono,
+          p_items: data.items.map((i) => ({
             producto_id: i.producto_id,
-            nombre_producto: i.nombre,
+            nombre: i.nombre,
             cantidad: i.cantidad,
             variante_personas: i.variante_personas,
             combo: i.combo,
             notas: i.notas,
             precio_unitario: i.precio_unitario,
           })),
-        )
-        .setHeader("x-cliente-telefono", pedido.cliente_telefono);
+        },
+      );
       if (itemsError) throw itemsError;
+      if (Number(itemsGuardados) !== data.items.length) {
+        throw new Error("No se guardaron todos los productos del pedido.");
+      }
     } catch (e) {
       // ── Manejo de falsos errores en celular ──────────────────────────────
       // En redes móviles (4G/datos) o Safari/iOS, el INSERT puede completarse
@@ -391,6 +394,7 @@ export async function crearPedido(data: {
 
       if (pedido.numero_comanda) {
         let verificado = false;
+        let pedidoEncontrado = false;
         try {
           const { data: pedidoVerificado } = await supabase.rpc(
             "consultar_pedido_por_comanda_y_telefono",
@@ -400,8 +404,9 @@ export async function crearPedido(data: {
             },
           );
           const itemsVerificados = (pedidoVerificado as { items?: unknown[] } | null)?.items;
+          pedidoEncontrado = Boolean(pedidoVerificado);
           verificado =
-            Boolean(pedidoVerificado) &&
+            pedidoEncontrado &&
             Array.isArray(itemsVerificados) &&
             itemsVerificados.length === data.items.length;
         } catch (verifError) {
@@ -425,6 +430,12 @@ export async function crearPedido(data: {
             pedido.numero_comanda,
           );
           // Continuar con el flujo normal (guardar local + retornar).
+        } else if (pedidoEncontrado) {
+          // El pedido principal existe, pero no pudimos confirmar sus líneas.
+          // Evitar el mensaje genérico que invita a crear un duplicado.
+          throw new Error(
+            "Tu pedido fue recibido, pero estamos terminando de verificar sus productos. No lo repitas; comunícate con la caja si no aparece en unos minutos.",
+          );
         } else if (!esErrorDeRed) {
           // Error real no relacionado con red (RLS, validación, etc.).
           console.error("Error al insertar pedido en Supabase:", e);

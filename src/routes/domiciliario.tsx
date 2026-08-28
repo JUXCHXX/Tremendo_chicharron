@@ -6,7 +6,7 @@ import {
   useLocation,
   useNavigate,
 } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   LogOut,
   Home,
@@ -106,7 +106,10 @@ function Domiciliario() {
   // Pedidos asignados a este domiciliario (Realtime)
   const { pedidos, recargar } = usePedidosRealtime({ staff: true });
 
-  const misPedidos = perfil ? pedidos.filter((p) => p.domiciliario_id === perfil.id) : [];
+  const misPedidos = useMemo(
+    () => (perfil ? pedidos.filter((p) => p.domiciliario_id === perfil.id) : []),
+    [perfil, pedidos],
+  );
 
   const pedidosActivos = misPedidos.filter(
     (p) =>
@@ -115,39 +118,34 @@ function Domiciliario() {
       p.estado === "pago_confirmado" ||
       p.estado === "en_cocina",
   );
-  const pedidosEntregadosHoy = misPedidos.filter((p) => {
-    if (p.estado !== "entregado") return false;
-    const hoy = new Date();
-    const entregado = new Date(p.entregado_en ?? p.creado_en);
-    return (
-      entregado.getFullYear() === hoy.getFullYear() &&
-      entregado.getMonth() === hoy.getMonth() &&
-      entregado.getDate() === hoy.getDate()
-    );
-  });
+  const pedidosEntregadosHoy = useMemo(
+    () =>
+      misPedidos.filter((p) => {
+        if (p.estado !== "entregado") return false;
+        const hoy = new Date();
+        const entregado = new Date(p.entregado_en ?? p.creado_en);
+        return (
+          entregado.getFullYear() === hoy.getFullYear() &&
+          entregado.getMonth() === hoy.getMonth() &&
+          entregado.getDate() === hoy.getDate()
+        );
+      }),
+    [misPedidos],
+  );
 
-  // Consultar la vista propinas_por_domiciliario para el día de hoy
+  // Calcular las propinas con los mismos pedidos entregados que ve el
+  // domiciliario. Evita depender de una igualdad exacta de timestamps de la
+  // vista SQL, que puede cambiar por la zona horaria del proyecto.
   useEffect(() => {
-    if (!supabase || !perfil) return;
-    const sb = supabase;
-    const inicioDeHoy = new Date();
-    inicioDeHoy.setHours(0, 0, 0, 0);
-    const cargarPropinasHoy = async () => {
-      const { data, error } = await sb
-        .from("propinas_por_domiciliario")
-        .select("*")
-        .eq("domiciliario_id", perfil.id)
-        .eq("dia", inicioDeHoy.toISOString())
-        .maybeSingle();
-      if (!error && data) {
-        setPropinasHoyData({
-          total_propinas: Number(data.total_propinas) || 0,
-          pedidos_entregados: Number(data.pedidos_entregados) || 0,
-        });
-      }
-    };
-    void cargarPropinasHoy();
-  }, [perfil, pedidos]);
+    if (!perfil) return;
+    setPropinasHoyData({
+      total_propinas: pedidosEntregadosHoy.reduce(
+        (total, p) => total + (Number(p.propina) || 0),
+        0,
+      ),
+      pedidos_entregados: pedidosEntregadosHoy.length,
+    });
+  }, [perfil, pedidosEntregadosHoy]);
 
   const asignarPedido = async () => {
     if (!numeroComanda.trim()) {

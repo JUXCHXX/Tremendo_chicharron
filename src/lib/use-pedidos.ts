@@ -122,6 +122,31 @@ export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: bo
     }
 
     if (filas) {
+      // La relación anidada normalmente trae los items, pero una consulta
+      // explícita evita que el detalle quede vacío si PostgREST no expande la
+      // relación en algún snapshot del Kanban.
+      if (opts?.staff && filas.length > 0) {
+        const ids = filas.map((p) => p.id);
+        const { data: itemsStaff, error: itemsError } = await supabase
+          .from("pedido_items")
+          .select("*")
+          .in("pedido_id", ids);
+        if (!itemsError && itemsStaff) {
+          const porPedido = new Map<string, PedidoItemDb[]>();
+          for (const item of itemsStaff as PedidoItemDb[]) {
+            const lista = porPedido.get(item.pedido_id) ?? [];
+            lista.push(item);
+            porPedido.set(item.pedido_id, lista);
+          }
+          filas = filas.map((p) => ({
+            ...p,
+            pedido_items: porPedido.get(p.id) ?? [],
+          }));
+        } else if (itemsError) {
+          console.error("Error cargando items de pedidos para staff:", itemsError);
+        }
+      }
+
       const conItems = filas.map((p) => {
         const pedidoNormalizado = {
           ...p,
