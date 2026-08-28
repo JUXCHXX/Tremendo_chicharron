@@ -19,6 +19,11 @@ export function estadoEditable(estado: string | EstadoPedido): boolean {
   return ESTADOS_EDITABLES.includes(estado as EstadoPedido);
 }
 
+function productoIdParaSupabase(id: string | null): string | null {
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuid.test(id ?? "") ? id : null;
+}
+
 export interface EditarPedidoResult {
   ok: boolean;
   error?: string;
@@ -48,7 +53,8 @@ export async function guardarEdicionPedido(
   }
 
   const itemsJson = items.map((i) => ({
-    producto_id: i.producto_id,
+    // Mantener snapshots antiguos aunque su ID ya no sea un UUID válido.
+    producto_id: productoIdParaSupabase(i.producto_id),
     nombre: i.nombre,
     cantidad: i.cantidad,
     variante_personas: i.variante_personas,

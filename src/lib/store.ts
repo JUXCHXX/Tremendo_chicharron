@@ -261,6 +261,15 @@ export const clearCart = () => setState((s) => ({ ...s, cart: [] }));
 export const cartTotal = (cart: CartItem[]) =>
   cart.reduce((acc, c) => acc + c.precio_unitario * c.cantidad, 0);
 
+// Los carritos pueden sobrevivir en localStorage después de una actualización
+// del catálogo. Los IDs antiguos (por ejemplo `pic-...`) no son UUID de
+// Supabase y hacen que el INSERT de pedido_items falle completo.
+function productoIdParaSupabase(id: string | null | undefined): string | null {
+  if (!id) return null;
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuid.test(id) ? id : null;
+}
+
 // ── Pedidos ──────────────────────────────────────────────────
 function nuevoNumeroComanda(): string {
   const d = new Date();
@@ -355,7 +364,10 @@ export async function crearPedido(data: {
       // personalizado durante el INSERT protegido por RLS.
       const itemsPayload = data.items.map((i) => ({
         pedido_id: pedido.id,
-        producto_id: i.producto_id,
+        // El nombre y el precio son snapshots y bastan para cocinar/imprimir,
+        // incluso si el producto ya no existe. Un ID legacy no puede viajar a
+        // una columna uuid: se conserva como null en vez de abortar el lote.
+        producto_id: productoIdParaSupabase(i.producto_id),
         nombre_producto: i.nombre,
         cantidad: i.cantidad,
         variante_personas: i.variante_personas,
@@ -468,13 +480,11 @@ export async function crearPedido(data: {
           );
           // Continuar con el flujo normal (guardar local + retornar).
         } else if (pedidoEncontrado) {
-          // El pedido principal existe. No bloquear la confirmación del
-          // cliente ni provocar reintentos/duplicados por un fallo posterior
-          // al INSERT. La pantalla de confirmación usa el pedido local (que
-          // conserva los items del carrito) mientras caja sincroniza la BD.
-          console.error(
-            "[crearPedido] El pedido existe, pero no se pudieron confirmar sus items:",
-            e,
+          // Una cuenta sin líneas no es un pedido válido: caja/cocina no puede
+          // procesarlo y la factura no tendría el detalle de la compra.
+          console.error("[crearPedido] Pedido creado sin items confirmados:", e);
+          throw new Error(
+            "La cuenta se creó, pero no se guardaron los productos. No la procesaremos; intenta enviar el pedido nuevamente.",
           );
         } else if (!esErrorDeRed) {
           // Error real no relacionado con red (RLS, validación, etc.).

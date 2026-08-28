@@ -1,7 +1,7 @@
 import { formatCOP } from "./menu-data";
 import type { Pedido } from "./store";
 import { ESTADO_LABEL } from "./store";
-import { obtenerNit } from "./supabase";
+import { obtenerNit, supabase } from "./supabase";
 import { jsPDF } from "jspdf";
 
 /**
@@ -100,6 +100,40 @@ function formatearHora(iso: string): string {
   const ampm = horas >= 12 ? "p. m." : "a. m.";
   horas = horas % 12 || 12;
   return `${horas}:${minutos} ${ampm}`;
+}
+
+/**
+ * Garantiza que una factura/comanda tenga las líneas persistidas. Algunas
+ * vistas pueden conservar un snapshot local antiguo sin items, aunque la BD
+ * ya los tenga; la consulta segura valida también el teléfono del cliente.
+ */
+async function pedidoConItems(pd: Pedido): Promise<Pedido> {
+  if (pd.items.length > 0 || !supabase) return pd;
+
+  try {
+    const { data, error } = await supabase.rpc("consultar_pedido_por_comanda_y_telefono", {
+      p_numero_comanda: pd.numero_comanda,
+      p_telefono: pd.cliente_telefono,
+    });
+    const items = (data as { items?: Record<string, unknown>[] } | null)?.items;
+    if (error || !Array.isArray(items) || items.length === 0) return pd;
+    return {
+      ...pd,
+      items: items.map((i, index) => ({
+        key: String(i.id ?? `${pd.id}-${index}`),
+        producto_id: (i.producto_id as string | null) ?? null,
+        nombre: String(i.nombre_producto ?? i.nombre ?? "Producto"),
+        cantidad: Number(i.cantidad ?? 0),
+        variante_personas: i.variante_personas == null ? null : Number(i.variante_personas),
+        combo: Boolean(i.combo),
+        notas: String(i.notas ?? ""),
+        precio_unitario: Number(i.precio_unitario ?? 0),
+      })),
+    };
+  } catch (error) {
+    console.error("No se pudieron recuperar los items para imprimir:", error);
+    return pd;
+  }
 }
 
 /** Genera el HTML del ticket térmico de factura (formato 80mm). */
@@ -201,25 +235,26 @@ function generarTicketFactura(pd: Pedido, nit: string): string {
 }
 
 /** Comanda para cocina/caja (imprimible o guardable como PDF). */
-export function imprimirComanda(pd: Pedido) {
+export async function imprimirComanda(pd: Pedido) {
+  const completo = await pedidoConItems(pd);
   abrirImpresion(
-    `Comanda ${pd.numero_comanda}`,
+    `Comanda ${completo.numero_comanda}`,
     `<h1>Tremendo Chicharrón</h1>
-     <small>Comanda ${pd.numero_comanda} · v${pd.version}</small><hr/>
-     <div>${new Date(pd.creado_en).toLocaleString("es-CO")}</div>
-     <div>Cliente: ${pd.cliente_nombre} · ${pd.cliente_telefono}</div>
-     <div>Dirección: ${pd.direccion_entrega}</div>
-     <div>Estado: ${ESTADO_LABEL[pd.estado]}</div><hr/>
-     <table>${filas(pd)}</table><hr/>
+     <small>Comanda ${completo.numero_comanda} · v${completo.version}</small><hr/>
+     <div>${new Date(completo.creado_en).toLocaleString("es-CO")}</div>
+     <div>Cliente: ${completo.cliente_nombre} · ${completo.cliente_telefono}</div>
+     <div>Dirección: ${completo.direccion_entrega}</div>
+     <div>Estado: ${ESTADO_LABEL[completo.estado]}</div><hr/>
+     <table>${filas(completo)}</table><hr/>
      <table>
-       <tr><td>Subtotal</td><td class="r">${formatCOP(pd.subtotal)}</td></tr>
-       <tr><td>Domicilio</td><td class="r">${formatCOP(pd.valor_domicilio)}</td></tr>
-       ${pd.propina > 0 ? `<tr><td>Propina domiciliario</td><td class="r">${formatCOP(pd.propina)}</td></tr>` : ""}
-       <tr class="tot"><td>TOTAL</td><td class="r">${formatCOP(pd.total)}</td></tr>
+       <tr><td>Subtotal</td><td class="r">${formatCOP(completo.subtotal)}</td></tr>
+       <tr><td>Domicilio</td><td class="r">${formatCOP(completo.valor_domicilio)}</td></tr>
+       ${completo.propina > 0 ? `<tr><td>Propina domiciliario</td><td class="r">${formatCOP(completo.propina)}</td></tr>` : ""}
+       <tr class="tot"><td>TOTAL</td><td class="r">${formatCOP(completo.total)}</td></tr>
      </table>
-     <hr/><div>Pago: ${pd.medio_pago}${
-       pd.monto_efectivo_recibido != null
-         ? ` · Recibe ${formatCOP(pd.monto_efectivo_recibido)} · Vuelto ${formatCOP(pd.vuelto ?? 0)}`
+     <hr/><div>Pago: ${completo.medio_pago}${
+       completo.monto_efectivo_recibido != null
+         ? ` · Recibe ${formatCOP(completo.monto_efectivo_recibido)} · Vuelto ${formatCOP(completo.vuelto ?? 0)}`
          : ""
      }</div>`,
   );
@@ -243,13 +278,15 @@ const filas = (pd: Pedido) =>
  */
 export async function imprimirFacturaTermica(pd: Pedido) {
   const nit = await obtenerNit();
-  abrirImpresion(`Factura ${pd.numero_comanda}`, generarTicketFactura(pd, nit));
+  const completo = await pedidoConItems(pd);
+  abrirImpresion(`Factura ${completo.numero_comanda}`, generarTicketFactura(completo, nit));
 }
 
 /** Factura del cliente (formato térmico 80mm). */
 export async function descargarFactura(pd: Pedido) {
   const nit = await obtenerNit();
-  abrirImpresion(`Factura ${pd.numero_comanda}`, generarTicketFactura(pd, nit));
+  const completo = await pedidoConItems(pd);
+  abrirImpresion(`Factura ${completo.numero_comanda}`, generarTicketFactura(completo, nit));
 }
 
 /**
@@ -260,6 +297,7 @@ export async function descargarFactura(pd: Pedido) {
  */
 export async function descargarFacturaPdf(pd: Pedido) {
   const nit = await obtenerNit();
+  pd = await pedidoConItems(pd);
   const doc = new jsPDF({ unit: "mm", format: [80, 200] });
   const W = 80;
   const M = 5;
