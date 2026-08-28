@@ -382,7 +382,9 @@ function Admin() {
             <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
               <div className="flex gap-4 pb-4">
                 {COLUMNAS.map((estado) => {
-                  const enColumna = pedidosKanban.filter((p) => p.estado === estado);
+                  const enColumna = pedidosKanban.filter(
+                    (p) => etapaVisualEstado(p.estado) === estado,
+                  );
                   return (
                     <KanbanColumna
                       key={estado}

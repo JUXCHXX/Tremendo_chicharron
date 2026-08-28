@@ -370,22 +370,6 @@ export async function crearPedido(data: {
         )
         .setHeader("x-cliente-telefono", pedido.cliente_telefono);
       if (itemsError) throw itemsError;
-
-      // No basta con que exista la fila de pedidos: confirmar también que la
-      // relación de items quedó persistida. Esto evita aceptar un pedido
-      // "fantasma" con subtotal, pero sin productos para cocina.
-      const { data: pedidoVerificado, error: verificacionError } = await supabase.rpc(
-        "consultar_pedido_por_comanda_y_telefono",
-        {
-          p_numero_comanda: pedido.numero_comanda,
-          p_telefono: pedido.cliente_telefono,
-        },
-      );
-      if (verificacionError) throw verificacionError;
-      const itemsVerificados = (pedidoVerificado as { items?: unknown[] } | null)?.items;
-      if (!Array.isArray(itemsVerificados) || itemsVerificados.length !== data.items.length) {
-        throw new Error("El pedido se creó sin guardar todos sus productos.");
-      }
     } catch (e) {
       // ── Manejo de falsos errores en celular ──────────────────────────────
       // En redes móviles (4G/datos) o Safari/iOS, el INSERT puede completarse
