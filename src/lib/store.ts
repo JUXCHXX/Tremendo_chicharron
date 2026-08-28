@@ -353,22 +353,43 @@ export async function crearPedido(data: {
       // 3) Guardar items mediante una RPC segura e idempotente. Así el
       // checkout no depende de que el navegador móvil conserve un header
       // personalizado durante el INSERT protegido por RLS.
-      const { data: itemsGuardados, error: itemsError } = await supabase.rpc(
+      const itemsPayload = data.items.map((i) => ({
+        pedido_id: pedido.id,
+        producto_id: i.producto_id,
+        nombre_producto: i.nombre,
+        cantidad: i.cantidad,
+        variante_personas: i.variante_personas,
+        combo: i.combo,
+        notas: i.notas,
+        precio_unitario: i.precio_unitario,
+      }));
+      let { data: itemsGuardados, error: itemsError } = await supabase.rpc(
         "registrar_items_pedido",
         {
           p_pedido_id: pedido.id,
           p_telefono: pedido.cliente_telefono,
-          p_items: data.items.map((i) => ({
-            producto_id: i.producto_id,
-            nombre: i.nombre,
-            cantidad: i.cantidad,
-            variante_personas: i.variante_personas,
-            combo: i.combo,
-            notas: i.notas,
-            precio_unitario: i.precio_unitario,
+          p_items: itemsPayload.map((item) => ({
+            producto_id: item.producto_id,
+            nombre: item.nombre_producto,
+            cantidad: item.cantidad,
+            variante_personas: item.variante_personas,
+            combo: item.combo,
+            notas: item.notas,
+            precio_unitario: item.precio_unitario,
           })),
         },
       );
+      const rpcNoDisponible =
+        itemsError?.code === "42883" || itemsError?.message?.includes("registrar_items_pedido");
+      if (rpcNoDisponible) {
+        // Compatibilidad mientras la migración 26 termina de desplegarse.
+        const directInsert = await supabase
+          .from("pedido_items")
+          .insert(itemsPayload)
+          .setHeader("x-cliente-telefono", pedido.cliente_telefono);
+        itemsError = directInsert.error;
+        itemsGuardados = itemsError ? null : data.items.length;
+      }
       if (itemsError) throw itemsError;
       if (Number(itemsGuardados) !== data.items.length) {
         throw new Error("No se guardaron todos los productos del pedido.");
