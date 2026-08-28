@@ -379,16 +379,32 @@ export async function crearPedido(data: {
           })),
         },
       );
-      const rpcNoDisponible =
-        itemsError?.code === "42883" || itemsError?.message?.includes("registrar_items_pedido");
-      if (rpcNoDisponible) {
-        // Compatibilidad mientras la migración 26 termina de desplegarse.
-        const directInsert = await supabase
-          .from("pedido_items")
-          .insert(itemsPayload)
-          .setHeader("x-cliente-telefono", pedido.cliente_telefono);
-        itemsError = directInsert.error;
-        itemsGuardados = itemsError ? null : data.items.length;
+      const requiereRecuperacion =
+        Boolean(itemsError) || Number(itemsGuardados) !== data.items.length;
+      if (requiereRecuperacion) {
+        // Antes de reintentar, comprobar si la RPC sí alcanzó a guardar los
+        // items y solo se perdió su respuesta. Así nunca duplicamos líneas.
+        const { data: pedidoConfirmado, error: confirmacionError } = await supabase.rpc(
+          "consultar_pedido_por_comanda_y_telefono",
+          {
+            p_numero_comanda: pedido.numero_comanda,
+            p_telefono: pedido.cliente_telefono,
+          },
+        );
+        const itemsConfirmados = (pedidoConfirmado as { items?: unknown[] } | null)?.items;
+        if (Array.isArray(itemsConfirmados) && itemsConfirmados.length === data.items.length) {
+          itemsError = null;
+          itemsGuardados = data.items.length;
+        } else if (!confirmacionError && (itemsConfirmados?.length ?? 0) === 0) {
+          // Compatibilidad si la migración 26 aún no está disponible o falló
+          // antes de insertar: usa el INSERT existente protegido por header.
+          const directInsert = await supabase
+            .from("pedido_items")
+            .insert(itemsPayload)
+            .setHeader("x-cliente-telefono", pedido.cliente_telefono);
+          itemsError = directInsert.error;
+          itemsGuardados = itemsError ? null : data.items.length;
+        }
       }
       if (itemsError) throw itemsError;
       if (Number(itemsGuardados) !== data.items.length) {
@@ -452,10 +468,13 @@ export async function crearPedido(data: {
           );
           // Continuar con el flujo normal (guardar local + retornar).
         } else if (pedidoEncontrado) {
-          // El pedido principal existe, pero no pudimos confirmar sus líneas.
-          // Evitar el mensaje genérico que invita a crear un duplicado.
-          throw new Error(
-            "Tu pedido fue recibido, pero estamos terminando de verificar sus productos. No lo repitas; comunícate con la caja si no aparece en unos minutos.",
+          // El pedido principal existe. No bloquear la confirmación del
+          // cliente ni provocar reintentos/duplicados por un fallo posterior
+          // al INSERT. La pantalla de confirmación usa el pedido local (que
+          // conserva los items del carrito) mientras caja sincroniza la BD.
+          console.error(
+            "[crearPedido] El pedido existe, pero no se pudieron confirmar sus items:",
+            e,
           );
         } else if (!esErrorDeRed) {
           // Error real no relacionado con red (RLS, validación, etc.).
