@@ -145,6 +145,35 @@ export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: bo
         } else if (itemsError) {
           console.error("Error cargando items de pedidos para staff:", itemsError);
         }
+
+        // Último respaldo de lectura: la RPC de cliente es SECURITY DEFINER
+        // y devuelve pedido + items sin depender de la expansión relacional
+        // ni de la política SELECT directa de pedido_items.
+        const pedidosSinItems = filas.filter((p) => (p.pedido_items ?? []).length === 0);
+        const telefonos = [...new Set(pedidosSinItems.map((p) => p.cliente_telefono))];
+        if (telefonos.length > 0) {
+          const respuestas = await Promise.all(
+            telefonos.map((telefono) =>
+              supabase.rpc("consultar_pedidos_por_telefono", { p_telefono: telefono }),
+            ),
+          );
+          const itemsPorPedido = new Map<string, PedidoItemDb[]>();
+          for (const respuesta of respuestas) {
+            if (respuesta.error || !Array.isArray(respuesta.data)) continue;
+            for (const entrada of respuesta.data as {
+              pedido: PedidoDb;
+              items: PedidoItemDb[];
+            }[]) {
+              if (entrada.items?.length) itemsPorPedido.set(entrada.pedido.id, entrada.items);
+            }
+          }
+          filas = filas.map((p) => ({
+            ...p,
+            pedido_items: p.pedido_items?.length
+              ? p.pedido_items
+              : (itemsPorPedido.get(p.id) ?? []),
+          }));
+        }
       }
 
       const conItems = filas.map((p) => {
