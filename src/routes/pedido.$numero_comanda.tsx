@@ -4,7 +4,7 @@ import { ArrowLeft, Search, MessageCircle, Printer } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import { supabase } from "@/lib/supabase";
 import { linkPago, descargarFactura } from "@/lib/documentos";
-import { ESTADOS_FLUJO, ESTADO_LABEL_CLIENTE, type Pedido } from "@/lib/store";
+import { ESTADOS_FLUJO, ETAPA_LABEL_CLIENTE, etapaVisualEstado, type Pedido } from "@/lib/store";
 
 export const Route = createFileRoute("/pedido/$numero_comanda")({
   head: () => ({
@@ -181,7 +181,7 @@ function convertirPedido(
 }
 
 function DetallePedido({ pedido }: { pedido: Pedido }) {
-  const idxActual = ESTADOS_FLUJO.indexOf(pedido.estado);
+  const idxActual = ESTADOS_FLUJO.indexOf(etapaVisualEstado(pedido.estado));
   const puedePagar =
     pedido.estado === "pendiente_confirmacion_cajera" || pedido.estado === "pendiente_pago";
 
@@ -208,7 +208,7 @@ function DetallePedido({ pedido }: { pedido: Pedido }) {
                   }`}
                 />
                 <span className={i <= idxActual ? "text-foreground" : "text-muted-foreground"}>
-                  {ESTADO_LABEL_CLIENTE[e]}
+                  {ETAPA_LABEL_CLIENTE[e]}
                 </span>
               </li>
             ))}

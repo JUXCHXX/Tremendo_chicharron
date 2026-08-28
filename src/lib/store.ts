@@ -17,15 +17,39 @@ export type EstadoPedido =
   | "entregado"
   | "cancelado";
 
-export const ESTADOS_FLUJO: EstadoPedido[] = [
-  "pendiente_confirmacion_cajera",
-  "pendiente_pago",
-  "pago_confirmado",
+export const ESTADOS_FLUJO = [
+  "nuevo_pedido",
   "en_cocina",
   "en_preparacion",
   "en_camino",
   "entregado",
-];
+] as const;
+
+export type EtapaFlujo = (typeof ESTADOS_FLUJO)[number];
+
+export const ETAPA_LABEL: Record<EtapaFlujo, string> = {
+  nuevo_pedido: "Nuevo pedido",
+  en_cocina: "Cocina",
+  en_preparacion: "Preparado",
+  en_camino: "En camino",
+  entregado: "Entregado",
+};
+
+export const ETAPA_LABEL_CLIENTE: Record<EtapaFlujo, string> = {
+  ...ETAPA_LABEL,
+  nuevo_pedido: "Recibimos tu pedido",
+};
+
+/** Agrupa los estados internos en las cinco etapas que ve el usuario. */
+export function etapaVisualEstado(estado: string): EtapaFlujo {
+  if (["pendiente_confirmacion_cajera", "pendiente_pago", "pago_confirmado"].includes(estado)) {
+    return "nuevo_pedido";
+  }
+  if (estado === "en_cocina") return "en_cocina";
+  if (estado === "en_preparacion") return "en_preparacion";
+  if (estado === "en_camino") return "en_camino";
+  return "entregado";
+}
 
 export const ESTADO_LABEL: Record<EstadoPedido, string> = {
   pendiente_confirmacion_cajera: "Esperando confirmación de la caja",
@@ -44,11 +68,11 @@ export const ESTADO_LABEL: Record<EstadoPedido, string> = {
  * "Nuevo pedido — por confirmar" y sabe que su botón es la acción.
  */
 export const ESTADO_LABEL_STAFF: Record<EstadoPedido, string> = {
-  pendiente_confirmacion_cajera: "Nuevo pedido — por confirmar",
-  pendiente_pago: "Pendiente de pago",
-  pago_confirmado: "Pago confirmado",
-  en_cocina: "En cocina",
-  en_preparacion: "En preparación",
+  pendiente_confirmacion_cajera: "Nuevo pedido",
+  pendiente_pago: "Nuevo pedido",
+  pago_confirmado: "Nuevo pedido",
+  en_cocina: "Cocina",
+  en_preparacion: "Preparado",
   en_camino: "En camino",
   entregado: "Entregado",
   cancelado: "Cancelado",
@@ -62,10 +86,10 @@ export const ESTADO_LABEL_STAFF: Record<EstadoPedido, string> = {
  */
 export const ESTADO_LABEL_CLIENTE: Record<EstadoPedido, string> = {
   pendiente_confirmacion_cajera: "Recibimos tu pedido",
-  pendiente_pago: "Pendiente de pago",
-  pago_confirmado: "Pago confirmado",
-  en_cocina: "En cocina",
-  en_preparacion: "En preparación",
+  pendiente_pago: "Recibimos tu pedido",
+  pago_confirmado: "Recibimos tu pedido",
+  en_cocina: "Cocina",
+  en_preparacion: "Preparado",
   en_camino: "En camino",
   entregado: "Entregado",
   cancelado: "Cancelado",
@@ -346,6 +370,22 @@ export async function crearPedido(data: {
         )
         .setHeader("x-cliente-telefono", pedido.cliente_telefono);
       if (itemsError) throw itemsError;
+
+      // No basta con que exista la fila de pedidos: confirmar también que la
+      // relación de items quedó persistida. Esto evita aceptar un pedido
+      // "fantasma" con subtotal, pero sin productos para cocina.
+      const { data: pedidoVerificado, error: verificacionError } = await supabase.rpc(
+        "consultar_pedido_por_comanda_y_telefono",
+        {
+          p_numero_comanda: pedido.numero_comanda,
+          p_telefono: pedido.cliente_telefono,
+        },
+      );
+      if (verificacionError) throw verificacionError;
+      const itemsVerificados = (pedidoVerificado as { items?: unknown[] } | null)?.items;
+      if (!Array.isArray(itemsVerificados) || itemsVerificados.length !== data.items.length) {
+        throw new Error("El pedido se creó sin guardar todos sus productos.");
+      }
     } catch (e) {
       // ── Manejo de falsos errores en celular ──────────────────────────────
       // En redes móviles (4G/datos) o Safari/iOS, el INSERT puede completarse
@@ -368,11 +408,18 @@ export async function crearPedido(data: {
       if (pedido.numero_comanda) {
         let verificado = false;
         try {
-          const { data } = await supabase.rpc("consultar_pedido_por_comanda_y_telefono", {
-            p_numero_comanda: pedido.numero_comanda,
-            p_telefono: pedido.cliente_telefono,
-          });
-          verificado = Boolean(data);
+          const { data: pedidoVerificado } = await supabase.rpc(
+            "consultar_pedido_por_comanda_y_telefono",
+            {
+              p_numero_comanda: pedido.numero_comanda,
+              p_telefono: pedido.cliente_telefono,
+            },
+          );
+          const itemsVerificados = (pedidoVerificado as { items?: unknown[] } | null)?.items;
+          verificado =
+            Boolean(pedidoVerificado) &&
+            Array.isArray(itemsVerificados) &&
+            itemsVerificados.length === data.items.length;
         } catch (verifError) {
           if (esErrorDeRed) {
             // No se pudo verificar (red caída) — no podemos confirmar éxito.

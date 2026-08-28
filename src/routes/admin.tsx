@@ -38,7 +38,7 @@ import { estaAutenticado, cerrarSesion } from "@/lib/auth-staff";
 import { formatCOP } from "@/lib/menu-data";
 import { supabase } from "@/lib/supabase";
 import { usePedidosRealtime, type PedidoDb } from "@/lib/use-pedidos";
-import { ESTADO_LABEL_STAFF, type EstadoPedido } from "@/lib/store";
+import { ETAPA_LABEL, etapaVisualEstado, type EtapaFlujo, type EstadoPedido } from "@/lib/store";
 import { imprimirFacturaTermica } from "@/lib/documentos";
 import { DetallePedidoModal } from "@/components/DetallePedidoModal";
 
@@ -69,15 +69,21 @@ export const Route = createFileRoute("/admin")({
   component: Admin,
 });
 
-const COLUMNAS: EstadoPedido[] = [
-  "pendiente_confirmacion_cajera",
-  "pendiente_pago",
-  "pago_confirmado",
+const COLUMNAS: EtapaFlujo[] = [
+  "nuevo_pedido",
   "en_cocina",
   "en_preparacion",
   "en_camino",
   "entregado",
 ];
+
+const ESTADO_DESTINO: Record<EtapaFlujo, EstadoPedido> = {
+  nuevo_pedido: "pendiente_confirmacion_cajera",
+  en_cocina: "en_cocina",
+  en_preparacion: "en_preparacion",
+  en_camino: "en_camino",
+  entregado: "entregado",
+};
 
 /**
  * Colores de acento por estado (solo borde/acento — el fondo de la tarjeta
@@ -231,9 +237,9 @@ function Admin() {
     const { active, over } = e;
     if (!over) return;
     const id = String(active.id);
-    const nuevoEstado = String(over.id) as EstadoPedido;
+    const nuevoEstado = ESTADO_DESTINO[String(over.id) as EtapaFlujo];
     const pd = pedidos.find((p) => p.id === id);
-    if (pd && pd.estado !== nuevoEstado && COLUMNAS.includes(nuevoEstado)) {
+    if (pd && nuevoEstado && pd.estado !== nuevoEstado) {
       void cambiarEstadoDb(id, nuevoEstado);
     }
   };
@@ -444,7 +450,9 @@ function Admin() {
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-semibold ${BADGE_ESTADO[pd.estado] ?? "bg-muted text-muted-foreground"}`}
                       >
-                        {ESTADO_LABEL_STAFF[pd.estado as EstadoPedido] ?? pd.estado}
+                        {pd.estado === "cancelado"
+                          ? "Cancelado"
+                          : ETAPA_LABEL[etapaVisualEstado(pd.estado)]}
                       </span>
                     </div>
                     <div className="mt-3 text-sm">
@@ -501,7 +509,7 @@ function KanbanColumna({
   onVerDetalle,
   domiciliarios,
 }: {
-  estado: EstadoPedido;
+  estado: EtapaFlujo;
   pedidos: PedidoDb[];
   onCambiarEstado: (id: string, estado: string) => void;
   onSetDomicilio: (id: string, valor: number, pd: PedidoDb) => void;
@@ -518,7 +526,7 @@ function KanbanColumna({
       }`}
     >
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-foreground">{ESTADO_LABEL_STAFF[estado]}</h3>
+        <h3 className="text-sm font-bold text-foreground">{ETAPA_LABEL[estado]}</h3>
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
           {pedidos.length}
         </span>
@@ -599,7 +607,7 @@ function TarjetaPedido({
           <span
             className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${BADGE_ESTADO[pd.estado] ?? "bg-muted text-muted-foreground"}`}
           >
-            {ESTADO_LABEL_STAFF[pd.estado as EstadoPedido] ?? pd.estado}
+            {ETAPA_LABEL[etapaVisualEstado(pd.estado)]}
           </span>
           {!overlay && onVerDetalle && (
             <button
@@ -669,11 +677,11 @@ function TarjetaPedido({
         <span className="font-display text-xl text-primary">{formatCOP(pd.total)}</span>
         <div className="flex items-center gap-1">
           {cambiandoId === pd.id && <Loader2 className="size-3 animate-spin text-primary" />}
-          {pd.estado === "pendiente_confirmacion_cajera" && (
+          {etapaVisualEstado(pd.estado) === "nuevo_pedido" && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                void onCambiarEstado(pd.id, "pendiente_pago");
+                void onCambiarEstado(pd.id, "en_cocina");
               }}
               disabled={cambiandoId === pd.id}
               className="rounded-lg bg-brasa px-2 py-1 text-[10px] font-bold text-primary-foreground disabled:opacity-50"
@@ -681,20 +689,8 @@ function TarjetaPedido({
               Confirmar pedido
             </button>
           )}
-          {pd.estado === "pendiente_pago" && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                void onCambiarEstado(pd.id, "pago_confirmado");
-              }}
-              disabled={cambiandoId === pd.id}
-              className="rounded-lg bg-brasa px-2 py-1 text-[10px] font-bold text-primary-foreground disabled:opacity-50"
-            >
-              Confirmar pago
-            </button>
-          )}
-          {/* La cajera solo imprime la factura cuando el pedido está en "Pendiente de pago" */}
-          {pd.estado === "pendiente_pago" && (
+          {/* La factura queda disponible inmediatamente después de confirmar. */}
+          {["en_cocina", "en_preparacion", "en_camino", "entregado"].includes(pd.estado) && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -710,7 +706,7 @@ function TarjetaPedido({
         </div>
       </div>
 
-      {pd.estado === "pendiente_pago" && (
+      {etapaVisualEstado(pd.estado) === "nuevo_pedido" && (
         <div className="mt-2 flex items-center gap-2 border-t border-border pt-2">
           <label className="flex items-center gap-1 text-[10px] text-muted-foreground">
             Domicilio

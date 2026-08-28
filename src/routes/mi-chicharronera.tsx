@@ -17,7 +17,7 @@ import { formatCOP } from "@/lib/menu-data";
 import { getClienteLocal, normalizarTelefono } from "@/lib/clientes";
 import { usePedidosRealtime, type PedidoDb, type PedidoItemNormalizado } from "@/lib/use-pedidos";
 import { linkPago, descargarFactura } from "@/lib/documentos";
-import { ESTADOS_FLUJO, ESTADO_LABEL_CLIENTE } from "@/lib/store";
+import { ESTADOS_FLUJO, ETAPA_LABEL_CLIENTE, etapaVisualEstado } from "@/lib/store";
 import { cargarValoraciones, crearValoracion, type ValoracionDb } from "@/lib/valoraciones";
 import { StarRating } from "@/components/StarRating";
 import { DetallePedidoModal } from "@/components/DetallePedidoModal";
@@ -168,7 +168,7 @@ function PedidoCard({
   telefono: string | null;
   onVerDetalle: (id: string) => void;
 }) {
-  const idxActual = ESTADOS_FLUJO.indexOf(p.estado as (typeof ESTADOS_FLUJO)[number]);
+  const idxActual = ESTADOS_FLUJO.indexOf(etapaVisualEstado(p.estado));
   const entregado = p.estado === "entregado";
   const [valoraciones, setValoraciones] = useState<ValoracionDb[]>([]);
 
@@ -202,7 +202,9 @@ function PedidoCard({
         <div className="flex flex-col items-end gap-1.5">
           <span className="flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
             {ESTADO_ICON[p.estado] ?? <Clock className="size-5" />}
-            {ESTADO_LABEL_CLIENTE[p.estado as keyof typeof ESTADO_LABEL_CLIENTE] ?? p.estado}
+            {p.estado === "cancelado"
+              ? "Cancelado"
+              : ETAPA_LABEL_CLIENTE[etapaVisualEstado(p.estado)]}
           </span>
           <button
             onClick={() => onVerDetalle(p.id)}
@@ -223,7 +225,7 @@ function PedidoCard({
                 }`}
               />
               <span className={i <= idxActual ? "text-foreground" : "text-muted-foreground"}>
-                {ESTADO_LABEL_CLIENTE[e]}
+                {ETAPA_LABEL_CLIENTE[e]}
               </span>
             </li>
           ))}

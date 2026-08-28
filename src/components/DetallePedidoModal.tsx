@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import type { PedidoDb } from "@/lib/use-pedidos";
-import { ESTADO_LABEL_STAFF, ESTADO_LABEL_CLIENTE } from "@/lib/store";
+import { ETAPA_LABEL, ETAPA_LABEL_CLIENTE, etapaVisualEstado } from "@/lib/store";
 import { estadoEditable } from "@/lib/editar-pedido";
 import { EditorPedido } from "@/components/EditorPedido";
 import {
@@ -58,9 +58,9 @@ export function DetallePedidoModal({
   if (!pedido) return null;
 
   const label =
-    (staff ? ESTADO_LABEL_STAFF : ESTADO_LABEL_CLIENTE)[
-      pedido.estado as keyof typeof ESTADO_LABEL_STAFF
-    ] ?? pedido.estado;
+    pedido.estado === "cancelado"
+      ? "Cancelado"
+      : (staff ? ETAPA_LABEL : ETAPA_LABEL_CLIENTE)[etapaVisualEstado(pedido.estado)];
 
   const editable =
     estadoEditable(pedido.estado) &&

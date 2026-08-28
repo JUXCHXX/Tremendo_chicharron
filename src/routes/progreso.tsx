@@ -4,7 +4,8 @@ import { ArrowLeft, Clock, Printer } from "lucide-react";
 import { formatCOP } from "@/lib/menu-data";
 import {
   ESTADOS_FLUJO,
-  ESTADO_LABEL_CLIENTE,
+  ETAPA_LABEL_CLIENTE,
+  etapaVisualEstado,
   editarComanda,
   puedeEditarCliente,
   useStore,
@@ -70,7 +71,7 @@ function DetallePedido({ pedido }: { pedido: Pedido }) {
     0,
     Math.ceil((new Date(pedido.editable_hasta).getTime() - Date.now()) / 60000),
   );
-  const idxActual = ESTADOS_FLUJO.indexOf(pedido.estado);
+  const idxActual = ESTADOS_FLUJO.indexOf(etapaVisualEstado(pedido.estado));
 
   return (
     <>
@@ -95,7 +96,7 @@ function DetallePedido({ pedido }: { pedido: Pedido }) {
                   }`}
                 />
                 <span className={i <= idxActual ? "text-foreground" : "text-muted-foreground"}>
-                  {ESTADO_LABEL_CLIENTE[e]}
+                  {ETAPA_LABEL_CLIENTE[e]}
                 </span>
               </li>
             ))}
