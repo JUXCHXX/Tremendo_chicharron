@@ -11,6 +11,7 @@ export type EstadoPedido =
   | "pendiente_confirmacion_cajera"
   | "pendiente_pago"
   | "pago_confirmado"
+  | "pago_rechazado"
   | "en_cocina"
   | "en_preparacion"
   | "en_camino"
@@ -42,7 +43,14 @@ export const ETAPA_LABEL_CLIENTE: Record<EtapaFlujo, string> = {
 
 /** Agrupa los estados internos en las cinco etapas que ve el usuario. */
 export function etapaVisualEstado(estado: string): EtapaFlujo {
-  if (["pendiente_confirmacion_cajera", "pendiente_pago", "pago_confirmado"].includes(estado)) {
+  if (
+    [
+      "pendiente_confirmacion_cajera",
+      "pendiente_pago",
+      "pago_confirmado",
+      "pago_rechazado",
+    ].includes(estado)
+  ) {
     return "nuevo_pedido";
   }
   if (estado === "en_cocina") return "en_cocina";
@@ -55,6 +63,7 @@ export const ESTADO_LABEL: Record<EstadoPedido, string> = {
   pendiente_confirmacion_cajera: "Esperando confirmación de la caja",
   pendiente_pago: "Pendiente de pago",
   pago_confirmado: "Pago confirmado",
+  pago_rechazado: "Pago rechazado",
   en_cocina: "En cocina",
   en_preparacion: "En preparación",
   en_camino: "En camino",
@@ -71,6 +80,7 @@ export const ESTADO_LABEL_STAFF: Record<EstadoPedido, string> = {
   pendiente_confirmacion_cajera: "Nuevo pedido",
   pendiente_pago: "Nuevo pedido",
   pago_confirmado: "Nuevo pedido",
+  pago_rechazado: "Pago rechazado",
   en_cocina: "Cocina",
   en_preparacion: "Preparado",
   en_camino: "En camino",
@@ -88,6 +98,7 @@ export const ESTADO_LABEL_CLIENTE: Record<EstadoPedido, string> = {
   pendiente_confirmacion_cajera: "Recibimos tu pedido",
   pendiente_pago: "Recibimos tu pedido",
   pago_confirmado: "Recibimos tu pedido",
+  pago_rechazado: "Pago rechazado",
   en_cocina: "Cocina",
   en_preparacion: "Preparado",
   en_camino: "En camino",
@@ -126,6 +137,8 @@ export interface Pedido {
   creado_en: string;
   editable_hasta: string;
   version: number;
+  comprobante_pago_url?: string | null;
+  motivo_rechazo_pago?: string | null;
   items: CartItem[];
 }
 

@@ -530,7 +530,11 @@ export function generarMensajePago(pd: Pedido): string {
   const lineas = [
     `*TREMENDO CHICHARRÓN* 🐷`,
     `Hola, número de comanda *${pd.numero_comanda}*.`,
-    `Pedido: ${pd.items.reduce((a, i) => a + i.cantidad, 0)} items.`,
+    `Pedido:`,
+    ...pd.items.map(
+      (i) =>
+        `- ${i.cantidad}x ${i.nombre}${i.variante_personas ? ` (${i.variante_personas} pers.)` : ""}`,
+    ),
     `Total con domicilio: *${formatCOP(pd.total)}*.`,
     `Medio de pago: ${pd.medio_pago}.`,
   ];

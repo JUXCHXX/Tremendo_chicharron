@@ -21,6 +21,7 @@ import { ESTADOS_FLUJO, ETAPA_LABEL_CLIENTE, etapaVisualEstado } from "@/lib/sto
 import { cargarValoraciones, crearValoracion, type ValoracionDb } from "@/lib/valoraciones";
 import { StarRating } from "@/components/StarRating";
 import { DetallePedidoModal } from "@/components/DetallePedidoModal";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/mi-chicharronera")({
   head: () => ({
@@ -41,6 +42,7 @@ const ESTADO_ICON: Record<string, React.ReactNode> = {
   en_camino: <Truck className="size-5 text-purple-500" />,
   entregado: <CheckCircle2 className="size-5 text-emerald-500" />,
   cancelado: <XCircle className="size-5 text-red-500" />,
+  pago_rechazado: <XCircle className="size-5 text-red-500" />,
 };
 
 function MiChicharronera() {
@@ -51,7 +53,9 @@ function MiChicharronera() {
     if (cliente) setTelefono(normalizarTelefono(cliente.telefono));
   }, [cliente]);
   const telefonoNormalizado = cliente ? normalizarTelefono(cliente.telefono) : null;
-  const { pedidos, cargando, recargar } = usePedidosRealtime({ telefono: telefonoNormalizado });
+  const { pedidos, cargando, recargar, actualizarLocal } = usePedidosRealtime({
+    telefono: telefonoNormalizado,
+  });
   const pedidoDetalle = pedidos.find((p) => p.id === detalleId) ?? null;
 
   if (cargando) {
@@ -121,6 +125,8 @@ function MiChicharronera() {
               pedido={p}
               telefono={telefonoNormalizado}
               onVerDetalle={setDetalleId}
+              onRecargar={recargar}
+              onActualizarLocal={actualizarLocal}
             />
           ))}
 
@@ -136,6 +142,8 @@ function MiChicharronera() {
                     pedido={p}
                     telefono={telefonoNormalizado}
                     onVerDetalle={setDetalleId}
+                    onRecargar={recargar}
+                    onActualizarLocal={actualizarLocal}
                   />
                 ))}
               </div>
@@ -163,10 +171,14 @@ function PedidoCard({
   pedido: p,
   telefono,
   onVerDetalle,
+  onRecargar,
+  onActualizarLocal,
 }: {
   pedido: PedidoDb;
   telefono: string | null;
   onVerDetalle: (id: string) => void;
+  onRecargar: () => Promise<void>;
+  onActualizarLocal: (id: string, cambios: Partial<PedidoDb>) => void;
 }) {
   const idxActual = ESTADOS_FLUJO.indexOf(etapaVisualEstado(p.estado));
   const entregado = p.estado === "entregado";
@@ -237,6 +249,21 @@ function PedidoCard({
         <span className="text-primary">{formatCOP(p.total)}</span>
       </div>
 
+      {p.estado === "pago_rechazado" && (
+        <div className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm">
+          <p className="font-bold text-red-300">El comprobante fue rechazado</p>
+          {p.motivo_rechazo_pago && (
+            <p className="mt-1 text-xs text-red-200/80">Motivo: {p.motivo_rechazo_pago}</p>
+          )}
+          <ReintentarComprobante
+            pedido={p}
+            telefono={telefono}
+            onRecargar={onRecargar}
+            onActualizarLocal={onActualizarLocal}
+          />
+        </div>
+      )}
+
       {(p.estado === "pendiente_confirmacion_cajera" || p.estado === "pendiente_pago") && (
         <a
           href={linkPago(p as never)}
@@ -294,6 +321,74 @@ function PedidoCard({
         </div>
       )}
     </article>
+  );
+}
+
+function ReintentarComprobante({
+  pedido,
+  telefono,
+  onRecargar,
+  onActualizarLocal,
+}: {
+  pedido: PedidoDb;
+  telefono: string | null;
+  onRecargar: () => Promise<void>;
+  onActualizarLocal: (id: string, cambios: Partial<PedidoDb>) => void;
+}) {
+  const [archivo, setArchivo] = useState<File | null>(null);
+  const [subiendo, setSubiendo] = useState(false);
+  const [error, setError] = useState("");
+  async function enviar() {
+    if (!archivo || !telefono || !supabase) return;
+    setSubiendo(true);
+    setError("");
+    try {
+      const ruta = `comprobantes/${pedido.numero_comanda}-${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from("menu-imagenes")
+        .upload(ruta, archivo, { contentType: archivo.type || "image/jpeg" });
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from("menu-imagenes").getPublicUrl(ruta);
+      const { error: rpcError } = await supabase.rpc("registrar_comprobante_pago", {
+        p_pedido_id: pedido.id,
+        p_telefono: telefono,
+        p_comprobante_url: data.publicUrl,
+      });
+      if (rpcError) throw rpcError;
+      onActualizarLocal(pedido.id, {
+        estado: "pendiente_pago",
+        comprobante_pago_url: data.publicUrl,
+        motivo_rechazo_pago: null,
+      });
+      await onRecargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo subir el comprobante.");
+    } finally {
+      setSubiendo(false);
+    }
+  }
+  return (
+    <div className="mt-3 space-y-2">
+      <label className="flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-red-300/50 px-3 py-2 text-xs text-red-100">
+        {archivo ? archivo.name : "Selecciona una nueva foto"}
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => setArchivo(e.target.files?.[0] ?? null)}
+        />
+      </label>
+      <button
+        type="button"
+        disabled={!archivo || subiendo}
+        onClick={() => void enviar()}
+        className="w-full rounded-xl bg-brasa py-2 text-sm font-bold text-primary-foreground disabled:opacity-40"
+      >
+        {subiendo ? "Subiendo comprobante…" : "Volver a enviar"}
+      </button>
+      {error && <p className="text-xs text-red-200">{error}</p>}
+    </div>
   );
 }
 

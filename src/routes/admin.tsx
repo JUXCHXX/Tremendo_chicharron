@@ -22,6 +22,8 @@ import {
   MapPin,
   StickyNote,
   Bike,
+  Check,
+  Ban,
 } from "lucide-react";
 import {
   DndContext,
@@ -123,6 +125,7 @@ function Admin() {
   const [busquedaComanda, setBusquedaComanda] = useState("");
   const [detalleId, setDetalleId] = useState<string | null>(null);
   const [domiciliarios, setDomiciliarios] = useState<Record<string, string>>({});
+  const [comprobanteAbierto, setComprobanteAbierto] = useState<string | null>(null);
 
   // Cargar domiciliarios para mostrar el nombre en las tarjetas
   useEffect(() => {
@@ -220,6 +223,22 @@ function Admin() {
     } finally {
       setCambiandoId(null);
     }
+  };
+
+  const verificarComprobante = async (
+    id: string,
+    estado: "en_cocina" | "pago_rechazado",
+    motivo?: string,
+  ) => {
+    const ok = await cambiarEstadoDb(id, estado);
+    if (ok && supabase && estado === "pago_rechazado") {
+      await supabase
+        .from("pedidos")
+        .update({ motivo_rechazo_pago: motivo?.trim() || null })
+        .eq("id", id);
+      void recargar();
+    }
+    return ok;
   };
 
   const onDragStart = (e: DragStartEvent) => {
@@ -394,6 +413,8 @@ function Admin() {
                       onSetDomicilio={setDomicilioDb}
                       cambiandoId={cambiandoId}
                       onVerDetalle={(id) => setDetalleId(id)}
+                      onVerificarComprobante={verificarComprobante}
+                      onAbrirComprobante={setComprobanteAbierto}
                       domiciliarios={domiciliarios}
                     />
                   );
@@ -407,6 +428,8 @@ function Admin() {
                     onSetDomicilio={setDomicilioDb}
                     cambiandoId={cambiandoId}
                     overlay
+                    onVerificarComprobante={verificarComprobante}
+                    onAbrirComprobante={setComprobanteAbierto}
                     domiciliarios={domiciliarios}
                   />
                 ) : null}
@@ -424,6 +447,30 @@ function Admin() {
               }}
               onImprimir={(pd) => void imprimirFacturaTermica(pd as never)}
             />
+            {comprobanteAbierto && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+                onClick={() => setComprobanteAbierto(null)}
+              >
+                <div
+                  className="relative max-h-[90vh] max-w-3xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <img
+                    src={comprobanteAbierto}
+                    alt="Comprobante de pago ampliado"
+                    className="max-h-[85vh] max-w-full rounded-2xl object-contain"
+                  />
+                  <button
+                    onClick={() => setComprobanteAbierto(null)}
+                    className="absolute -right-3 -top-3 rounded-full bg-card p-2 text-foreground shadow-lg"
+                    aria-label="Cerrar comprobante"
+                  >
+                    <X className="size-5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -509,6 +556,8 @@ function KanbanColumna({
   onSetDomicilio,
   cambiandoId,
   onVerDetalle,
+  onVerificarComprobante,
+  onAbrirComprobante,
   domiciliarios,
 }: {
   estado: EtapaFlujo;
@@ -517,6 +566,12 @@ function KanbanColumna({
   onSetDomicilio: (id: string, valor: number, pd: PedidoDb) => void;
   cambiandoId: string | null;
   onVerDetalle: (id: string) => void;
+  onVerificarComprobante: (
+    id: string,
+    estado: "en_cocina" | "pago_rechazado",
+    motivo?: string,
+  ) => Promise<boolean>;
+  onAbrirComprobante: (url: string) => void;
   domiciliarios: Record<string, string>;
 }) {
   const { setNodeRef, isOver } = useSortable({ id: estado });
@@ -543,6 +598,8 @@ function KanbanColumna({
               onSetDomicilio={onSetDomicilio}
               cambiandoId={cambiandoId}
               onVerDetalle={onVerDetalle}
+              onVerificarComprobante={onVerificarComprobante}
+              onAbrirComprobante={onAbrirComprobante}
               domiciliarios={domiciliarios}
             />
           ))}
@@ -563,6 +620,8 @@ function TarjetaPedido({
   onSetDomicilio,
   cambiandoId,
   onVerDetalle,
+  onVerificarComprobante,
+  onAbrirComprobante,
   overlay = false,
   domiciliarios,
 }: {
@@ -571,6 +630,12 @@ function TarjetaPedido({
   onSetDomicilio: (id: string, valor: number, pd: PedidoDb) => void;
   cambiandoId: string | null;
   onVerDetalle?: (id: string) => void;
+  onVerificarComprobante: (
+    id: string,
+    estado: "en_cocina" | "pago_rechazado",
+    motivo?: string,
+  ) => Promise<boolean>;
+  onAbrirComprobante: (url: string) => void;
   overlay?: boolean;
   domiciliarios: Record<string, string>;
 }) {
@@ -585,6 +650,8 @@ function TarjetaPedido({
   };
 
   const items = pd.items ?? [];
+  const [motivo, setMotivo] = useState("");
+  const [rechazando, setRechazando] = useState(false);
 
   return (
     <article
@@ -648,6 +715,67 @@ function TarjetaPedido({
           {pd.barrio ? ` · ${pd.barrio}` : ""}
         </span>
       </p>
+
+      {pd.estado === "pendiente_pago" && pd.comprobante_pago_url && (
+        <div
+          className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-2.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-amber-300">
+            Comprobante recibido
+          </p>
+          <button
+            type="button"
+            onClick={() => onAbrirComprobante(pd.comprobante_pago_url!)}
+            className="block"
+          >
+            <img
+              src={pd.comprobante_pago_url}
+              alt="Miniatura del comprobante"
+              className="size-20 rounded-xl object-cover transition hover:scale-105"
+            />
+          </button>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={cambiandoId === pd.id}
+              onClick={() => void onVerificarComprobante(pd.id, "en_cocina")}
+              className="flex items-center justify-center gap-1 rounded-lg bg-emerald-600 px-2 py-2 text-[11px] font-bold text-white disabled:opacity-50"
+            >
+              <Check className="size-3.5" /> Aprobar pago
+            </button>
+            <button
+              type="button"
+              disabled={cambiandoId === pd.id}
+              onClick={() => setRechazando((v) => !v)}
+              className="flex items-center justify-center gap-1 rounded-lg border border-red-500/60 px-2 py-2 text-[11px] font-bold text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+            >
+              <Ban className="size-3.5" /> Rechazar
+            </button>
+          </div>
+          {rechazando && (
+            <div className="mt-2 space-y-2">
+              <textarea
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                placeholder="Motivo opcional"
+                rows={2}
+                className="w-full rounded-lg bg-input p-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  const ok = await onVerificarComprobante(pd.id, "pago_rechazado", motivo);
+                  if (ok) setRechazando(false);
+                }}
+                className="w-full rounded-lg bg-red-600 px-2 py-2 text-xs font-bold text-white"
+              >
+                Confirmar rechazo
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Productos con notas */}
       <div className="mt-2 space-y-1.5 border-t border-border pt-2">

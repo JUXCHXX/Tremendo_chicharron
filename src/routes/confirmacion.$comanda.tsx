@@ -76,6 +76,10 @@ async function consultarComanda(comanda: string, telefono: string): Promise<Pedi
       creado_en: String(p["creado_en"]),
       editable_hasta: String(p["editable_hasta"]),
       version: Number(p["version"] ?? 1),
+      comprobante_pago_url:
+        p["comprobante_pago_url"] != null ? String(p["comprobante_pago_url"]) : null,
+      motivo_rechazo_pago:
+        p["motivo_rechazo_pago"] != null ? String(p["motivo_rechazo_pago"]) : null,
       items: (itemsRaw ?? []).map((i: Record<string, unknown>) => ({
         key: String(i["id"]),
         producto_id: i["producto_id"] ? String(i["producto_id"]) : "",
@@ -305,6 +309,17 @@ function Confirmacion() {
           </p>
         )}
       </section>
+
+      {pedido.medio_pago === "transferencia" && pedido.comprobante_pago_url && (
+        <div className="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-left text-sm text-emerald-200">
+          ¡Comprobante recibido! Estamos verificando tu pago.
+        </div>
+      )}
+      {pedido.estado === "pago_rechazado" && (
+        <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-left text-sm text-red-200">
+          El comprobante necesita revisión. Puedes volver a enviarlo desde Mi Chicharronera.
+        </div>
+      )}
 
       {puedePagar && (
         <a

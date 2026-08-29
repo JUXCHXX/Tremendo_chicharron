@@ -41,6 +41,8 @@ export interface PedidoDb {
   subtotal: number;
   total: number;
   estado: string;
+  comprobante_pago_url: string | null;
+  motivo_rechazo_pago: string | null;
   version: number;
   creado_en: string;
   editable_hasta: string;

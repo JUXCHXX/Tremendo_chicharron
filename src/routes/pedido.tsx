@@ -1,11 +1,51 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, ChevronDown, Loader2, Sparkles, Plus } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  Loader2,
+  Sparkles,
+  Plus,
+  Copy,
+  Camera,
+  X,
+  QrCode,
+} from "lucide-react";
 import { formatCOP, dentroDeHorario } from "@/lib/menu-data";
 import { addToCart, cartTotal, crearPedido, useStore } from "@/lib/store";
 import { getClienteLocal, guardarCliente, normalizarTelefono } from "@/lib/clientes";
 import { MapaUbicacion } from "@/components/MapaUbicacion";
 import { buscarBarrios, useTarifasDomicilio, type TarifaDomicilio } from "@/lib/tarifas-domicilio";
+import { supabase } from "@/lib/supabase";
+import { linkPago } from "@/lib/documentos";
+
+const CUENTAS_TRANSFERENCIA = [
+  {
+    banco: "Bancolombia",
+    tipo: "Cuenta corriente",
+    numero: "37300002870",
+    logo: "/logos/bancolombia.png",
+    color: "#0033A0",
+  },
+  { banco: "Nequi", tipo: null, numero: "3016112924", logo: "/logos/nequi.png", color: "#DA1884" },
+  {
+    banco: "Bre-B",
+    tipo: "Llave",
+    numero: "0080575087",
+    logo: "/logos/breb.png",
+    color: "#008C99",
+  },
+  {
+    banco: "Bold",
+    tipo: "Paga con QR desde cualquier banco",
+    numero: null,
+    logo: "/logos/logobold.png",
+    color: "#E0264F",
+    esQR: true,
+    qrImagen: "/logos/bold.png",
+  },
+] as const;
 
 export const Route = createFileRoute("/pedido")({
   head: () => ({
@@ -92,6 +132,9 @@ function Checkout() {
   const [procesando, setProcesando] = useState(false);
   const [propina, setPropina] = useState(0);
   const [propinaOtro, setPropinaOtro] = useState(false);
+  const [comprobante, setComprobante] = useState<File | null>(null);
+  const [copiado, setCopiado] = useState<string | null>(null);
+  const pedidoTransferRef = useRef<Awaited<ReturnType<typeof crearPedido>> | null>(null);
   const barrioRef = useRef<HTMLDivElement>(null);
 
   // Precarga los datos del cliente guardados en el mini-login.
@@ -172,6 +215,10 @@ function Checkout() {
       setError("El valor con el que pagas debe ser igual o mayor al total.");
       return;
     }
+    if (medio === "transferencia" && !comprobante) {
+      setError("Sube una foto del comprobante para continuar.");
+      return;
+    }
     // Guardar cliente en localStorage + Supabase (teléfono normalizado)
     const telefonoNormalizado = normalizarTelefono(telefono);
     await guardarCliente({ nombre: nombre.trim(), telefono: telefonoNormalizado });
@@ -179,19 +226,46 @@ function Checkout() {
     setProcesando(true);
     setError("");
     try {
-      const pedido = await crearPedido({
-        cliente_nombre: nombre.trim(),
-        cliente_telefono: telefonoNormalizado,
-        direccion_entrega: direccion.trim(),
-        barrio: barrioSel.ubicacion,
-        valor_domicilio: barrioSel.tarifa,
-        propina,
-        medio_pago: medio,
-        monto_efectivo_recibido: medio === "efectivo" ? recibido : null,
-        items: cart,
-        latitud: lat,
-        longitud: lng,
-      });
+      const pedido =
+        pedidoTransferRef.current ??
+        (await crearPedido({
+          cliente_nombre: nombre.trim(),
+          cliente_telefono: telefonoNormalizado,
+          direccion_entrega: direccion.trim(),
+          barrio: barrioSel.ubicacion,
+          valor_domicilio: barrioSel.tarifa,
+          propina,
+          medio_pago: medio,
+          monto_efectivo_recibido: medio === "efectivo" ? recibido : null,
+          items: cart,
+          latitud: lat,
+          longitud: lng,
+        }));
+      if (medio === "transferencia" && !pedidoTransferRef.current)
+        pedidoTransferRef.current = pedido;
+      if (medio === "transferencia" && comprobante) {
+        if (!supabase)
+          throw new Error("No hay conexión con el servidor para subir el comprobante.");
+        const ruta = `comprobantes/${pedido.numero_comanda}-${Date.now()}.jpg`;
+        const { error: uploadError } = await supabase.storage
+          .from("menu-imagenes")
+          .upload(ruta, comprobante, {
+            contentType: comprobante.type || "image/jpeg",
+            upsert: false,
+          });
+        if (uploadError) throw new Error(`No se pudo subir el comprobante: ${uploadError.message}`);
+        const { data: urlData } = supabase.storage.from("menu-imagenes").getPublicUrl(ruta);
+        const { error: registroError } = await supabase.rpc("registrar_comprobante_pago", {
+          p_pedido_id: pedido.id,
+          p_telefono: pedido.cliente_telefono,
+          p_comprobante_url: urlData.publicUrl,
+        });
+        if (registroError)
+          throw new Error(`No se pudo registrar el comprobante: ${registroError.message}`);
+        pedido.comprobante_pago_url = urlData.publicUrl;
+        pedido.estado = "pendiente_pago";
+        window.open(linkPago(pedido), "_blank", "noopener,noreferrer");
+      }
       void navigate({ to: "/confirmacion/$comanda", params: { comanda: pedido.numero_comanda } });
     } catch (e) {
       setError(
@@ -506,15 +580,34 @@ function Checkout() {
           </div>
         )}
 
+        {medio === "transferencia" && (
+          <TransferenciaPago
+            comprobante={comprobante}
+            onComprobante={setComprobante}
+            copiado={copiado}
+            onCopiar={async (numero) => {
+              await navigator.clipboard.writeText(numero);
+              setCopiado(numero);
+              window.setTimeout(
+                () => setCopiado((actual) => (actual === numero ? null : actual)),
+                2000,
+              );
+            }}
+            onQuitar={() => setComprobante(null)}
+          />
+        )}
+
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <button
           onClick={confirmar}
-          disabled={!negocioAbierto || procesando}
+          disabled={!negocioAbierto || procesando || (medio === "transferencia" && !comprobante)}
           className="w-full rounded-2xl bg-brasa py-4 font-display text-2xl text-primary-foreground shadow-glow disabled:opacity-40"
         >
           {procesando
-            ? "Registrando pedido…"
+            ? medio === "transferencia"
+              ? "Subiendo comprobante…"
+              : "Registrando pedido…"
             : negocioAbierto
               ? "Confirmar pedido"
               : "Cerrado por ahora"}
@@ -532,6 +625,169 @@ function Checkout() {
         />
       )}
     </main>
+  );
+}
+
+function TransferenciaPago({
+  comprobante,
+  onComprobante,
+  copiado,
+  onCopiar,
+  onQuitar,
+}: {
+  comprobante: File | null;
+  onComprobante: (file: File | null) => void;
+  copiado: string | null;
+  onCopiar: (numero: string) => Promise<void>;
+  onQuitar: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [qrAbierto, setQrAbierto] = useState(false);
+
+  useEffect(() => {
+    if (!qrAbierto) return;
+    const overflowAnterior = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = overflowAnterior;
+    };
+  }, [qrAbierto]);
+
+  return (
+    <section className="space-y-4 rounded-2xl border border-primary/25 bg-card/80 p-4">
+      <div>
+        <p className="font-display text-2xl text-primary">Paga por transferencia</p>
+        <p className="text-xs text-muted-foreground">
+          Usa cualquiera de estas cuentas y guarda tu comprobante.
+        </p>
+      </div>
+      <div className="space-y-3">
+        {CUENTAS_TRANSFERENCIA.map((cuenta) => (
+          <article
+            key={cuenta.banco}
+            className="flex items-center gap-3 rounded-2xl border border-border bg-background/70 p-3"
+            style={{ borderLeft: `4px solid ${cuenta.color}` }}
+          >
+            <img
+              src={cuenta.logo}
+              alt={cuenta.banco}
+              className="size-12 shrink-0 rounded-xl bg-white object-contain p-1"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-white">{cuenta.banco}</p>
+              {cuenta.tipo && <p className="text-xs text-muted-foreground">{cuenta.tipo}</p>}
+              {!cuenta.esQR && (
+                <p className="truncate font-mono text-lg tracking-wide text-foreground">
+                  {cuenta.numero}
+                </p>
+              )}
+            </div>
+            {cuenta.esQR ? (
+              <button
+                type="button"
+                onClick={() => setQrAbierto(true)}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition duration-200 hover:scale-105 hover:brightness-110"
+              >
+                <QrCode className="size-4" /> Ver QR
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void onCopiar(cuenta.numero!)}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition duration-200 hover:scale-105 hover:brightness-110"
+              >
+                {copiado === cuenta.numero ? (
+                  <Check className="size-4 text-emerald-700" />
+                ) : (
+                  <Copy className="size-4" />
+                )}
+                {copiado === cuenta.numero ? "¡Copiado!" : "Copiar"}
+              </button>
+            )}
+          </article>
+        ))}
+      </div>
+      <div>
+        <p className="font-display text-xl text-primary">Sube tu comprobante de pago</p>
+        <p className="text-xs text-muted-foreground">
+          Lo revisamos y confirmamos tu pedido enseguida
+        </p>
+      </div>
+      {comprobante ? (
+        <div className="relative inline-block max-w-full">
+          <img
+            src={URL.createObjectURL(comprobante)}
+            alt="Vista previa del comprobante"
+            className="max-h-56 max-w-full rounded-2xl object-contain"
+          />
+          <button
+            type="button"
+            onClick={onQuitar}
+            className="absolute -right-2 -top-2 rounded-full bg-destructive p-1.5 text-white shadow-lg"
+            aria-label="Quitar comprobante"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="flex min-h-36 w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/40 bg-background/40 text-sm text-muted-foreground transition hover:border-primary hover:bg-primary/5"
+        >
+          <Camera className="size-8 text-primary" />
+          <span>Toca para subir una foto</span>
+          <span className="text-[11px]">JPG, PNG o foto desde tu cámara</span>
+        </button>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => onComprobante(e.target.files?.[0] ?? null)}
+      />
+      {qrAbierto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Código QR de Bold"
+          onClick={() => setQrAbierto(false)}
+        >
+          <div
+            className="relative w-full max-w-md rounded-3xl border border-primary/30 bg-card p-5 text-center shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setQrAbierto(false)}
+              className="absolute right-3 top-3 rounded-full p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              aria-label="Cerrar QR"
+            >
+              <X className="size-5" />
+            </button>
+            <p className="font-display text-2xl text-primary">QR Bold</p>
+            <img
+              src="/logos/bold.png"
+              alt="Código QR de Bold"
+              className="mx-auto mt-4 max-h-[min(65vh,420px)] w-auto max-w-full rounded-2xl bg-white p-3 object-contain"
+            />
+            <p className="mt-4 text-sm text-muted-foreground">
+              Escanea desde la app de tu banco — límite $11.000.000 por transacción
+            </p>
+            <a
+              href="/logos/bold.png"
+              download="bold-qr.png"
+              className="mt-4 inline-flex rounded-xl bg-primary px-5 py-3 text-sm font-bold text-primary-foreground transition hover:brightness-110"
+            >
+              Descargar QR
+            </a>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
