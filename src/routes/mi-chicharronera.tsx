@@ -349,12 +349,18 @@ function ReintentarComprobante({
         .upload(ruta, archivo, { contentType: archivo.type || "image/jpeg" });
       if (uploadError) throw uploadError;
       const { data } = supabase.storage.from("menu-imagenes").getPublicUrl(ruta);
-      const { error: rpcError } = await supabase.rpc("registrar_comprobante_pago", {
-        p_pedido_id: pedido.id,
-        p_telefono: telefono,
-        p_comprobante_url: data.publicUrl,
-      });
+      const { data: pedidoConComprobante, error: rpcError } = await supabase.rpc(
+        "registrar_comprobante_pago",
+        {
+          p_pedido_id: pedido.id,
+          p_telefono: telefono,
+          p_comprobante_url: data.publicUrl,
+        },
+      );
       if (rpcError) throw rpcError;
+      if (!pedidoConComprobante?.comprobante_pago_url) {
+        throw new Error("El comprobante se subió, pero no se confirmó en el pedido.");
+      }
       onActualizarLocal(pedido.id, {
         estado: "pendiente_pago",
         comprobante_pago_url: data.publicUrl,
@@ -374,7 +380,6 @@ function ReintentarComprobante({
         <input
           type="file"
           accept="image/*"
-          capture="environment"
           className="hidden"
           onChange={(e) => setArchivo(e.target.files?.[0] ?? null)}
         />

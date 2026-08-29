@@ -13,7 +13,7 @@ import {
   QrCode,
 } from "lucide-react";
 import { formatCOP, dentroDeHorario } from "@/lib/menu-data";
-import { addToCart, cartTotal, crearPedido, useStore } from "@/lib/store";
+import { addToCart, cartTotal, clearCart, crearPedido, useStore } from "@/lib/store";
 import { getClienteLocal, guardarCliente, normalizarTelefono } from "@/lib/clientes";
 import { MapaUbicacion } from "@/components/MapaUbicacion";
 import { buscarBarrios, useTarifasDomicilio, type TarifaDomicilio } from "@/lib/tarifas-domicilio";
@@ -110,28 +110,75 @@ const COMBOS_SUGERIDOS = [
   },
 ] as const;
 
+const CHECKOUT_DRAFT_KEY = "tremendo-chicharron-checkout-v1";
+type CheckoutDraft = {
+  nombre: string;
+  telefono: string;
+  barrioTexto: string;
+  barrioSel: TarifaDomicilio | null;
+  direccion: string;
+  lat: number | null;
+  lng: number | null;
+  medio: (typeof MEDIOS)[number]["id"];
+  billete: string;
+  propina: number;
+  propinaOtro: boolean;
+};
+
+function leerBorradorCheckout(): CheckoutDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(CHECKOUT_DRAFT_KEY);
+    return raw ? (JSON.parse(raw) as CheckoutDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function guardarBorradorCheckout(borrador: CheckoutDraft) {
+  try {
+    localStorage.setItem(CHECKOUT_DRAFT_KEY, JSON.stringify(borrador));
+  } catch {
+    /* quota */
+  }
+}
+
+function limpiarBorradorCheckout() {
+  try {
+    localStorage.removeItem(CHECKOUT_DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 function Checkout() {
   const navigate = useNavigate();
+  const borradorInicial = leerBorradorCheckout();
+  const tieneBorrador = borradorInicial !== null;
   const cart = useStore((s) => s.cart);
   const negocioAbierto = useStore((s) => s.config.negocio_abierto) && dentroDeHorario();
   const subtotal = cartTotal(cart);
   const { tarifas, cargando: cargandoTarifas } = useTarifasDomicilio();
 
-  const [nombre, setNombre] = useState("");
-  const [telefono, setTelefono] = useState("");
-  const [barrioTexto, setBarrioTexto] = useState("");
-  const [barrioSel, setBarrioSel] = useState<TarifaDomicilio | null>(null);
-  const [direccion, setDireccion] = useState("");
-  const [lat, setLat] = useState<number | null>(null);
-  const [lng, setLng] = useState<number | null>(null);
+  const [nombre, setNombre] = useState(borradorInicial?.nombre ?? "");
+  const [telefono, setTelefono] = useState(borradorInicial?.telefono ?? "");
+  const [barrioTexto, setBarrioTexto] = useState(borradorInicial?.barrioTexto ?? "");
+  const [barrioSel, setBarrioSel] = useState<TarifaDomicilio | null>(
+    borradorInicial?.barrioSel ?? null,
+  );
+  const [direccion, setDireccion] = useState(borradorInicial?.direccion ?? "");
+  const [lat, setLat] = useState<number | null>(borradorInicial?.lat ?? null);
+  const [lng, setLng] = useState<number | null>(borradorInicial?.lng ?? null);
   const [mapaAbierto, setMapaAbierto] = useState(false);
-  const [medio, setMedio] = useState<(typeof MEDIOS)[number]["id"]>("efectivo");
-  const [billete, setBillete] = useState("");
+  const [medio, setMedio] = useState<(typeof MEDIOS)[number]["id"]>(
+    borradorInicial?.medio ?? "efectivo",
+  );
+  const [billete, setBillete] = useState(borradorInicial?.billete ?? "");
   const [error, setError] = useState("");
   const [listaAbierta, setListaAbierta] = useState(false);
   const [procesando, setProcesando] = useState(false);
-  const [propina, setPropina] = useState(0);
-  const [propinaOtro, setPropinaOtro] = useState(false);
+  const [propina, setPropina] = useState(borradorInicial?.propina ?? 0);
+  const [propinaOtro, setPropinaOtro] = useState(borradorInicial?.propinaOtro ?? false);
   const [comprobante, setComprobante] = useState<File | null>(null);
   const [copiado, setCopiado] = useState<string | null>(null);
   const pedidoTransferRef = useRef<Awaited<ReturnType<typeof crearPedido>> | null>(null);
@@ -140,10 +187,59 @@ function Checkout() {
   // Precarga los datos del cliente guardados en el mini-login.
   useEffect(() => {
     const cliente = getClienteLocal();
-    if (cliente) {
+    if (cliente && !tieneBorrador) {
       setNombre(cliente.nombre);
       setTelefono(cliente.telefono);
     }
+  }, [tieneBorrador]);
+
+  useEffect(() => {
+    guardarBorradorCheckout({
+      nombre,
+      telefono,
+      barrioTexto,
+      barrioSel,
+      direccion,
+      lat,
+      lng,
+      medio,
+      billete,
+      propina,
+      propinaOtro,
+    });
+  }, [
+    nombre,
+    telefono,
+    barrioTexto,
+    barrioSel,
+    direccion,
+    lat,
+    lng,
+    medio,
+    billete,
+    propina,
+    propinaOtro,
+  ]);
+
+  useEffect(() => {
+    function restaurarAlVolver() {
+      if (document.visibilityState !== "visible") return;
+      const borrador = leerBorradorCheckout();
+      if (!borrador) return;
+      setNombre(borrador.nombre);
+      setTelefono(borrador.telefono);
+      setBarrioTexto(borrador.barrioTexto);
+      setBarrioSel(borrador.barrioSel);
+      setDireccion(borrador.direccion);
+      setLat(borrador.lat);
+      setLng(borrador.lng);
+      setMedio(borrador.medio);
+      setBillete(borrador.billete);
+      setPropina(borrador.propina);
+      setPropinaOtro(borrador.propinaOtro);
+    }
+    document.addEventListener("visibilitychange", restaurarAlVolver);
+    return () => document.removeEventListener("visibilitychange", restaurarAlVolver);
   }, []);
 
   // Cierra la lista desplegable al hacer clic fuera del combobox.
@@ -255,17 +351,25 @@ function Checkout() {
           });
         if (uploadError) throw new Error(`No se pudo subir el comprobante: ${uploadError.message}`);
         const { data: urlData } = supabase.storage.from("menu-imagenes").getPublicUrl(ruta);
-        const { error: registroError } = await supabase.rpc("registrar_comprobante_pago", {
-          p_pedido_id: pedido.id,
-          p_telefono: pedido.cliente_telefono,
-          p_comprobante_url: urlData.publicUrl,
-        });
+        const { data: pedidoConComprobante, error: registroError } = await supabase.rpc(
+          "registrar_comprobante_pago",
+          {
+            p_pedido_id: pedido.id,
+            p_telefono: pedido.cliente_telefono,
+            p_comprobante_url: urlData.publicUrl,
+          },
+        );
         if (registroError)
           throw new Error(`No se pudo registrar el comprobante: ${registroError.message}`);
+        if (!pedidoConComprobante?.comprobante_pago_url) {
+          throw new Error("El comprobante se subió, pero no se confirmó en el pedido.");
+        }
         pedido.comprobante_pago_url = urlData.publicUrl;
         pedido.estado = "pendiente_pago";
         window.open(linkPago(pedido), "_blank", "noopener,noreferrer");
       }
+      clearCart();
+      limpiarBorradorCheckout();
       void navigate({ to: "/confirmacion/$comanda", params: { comanda: pedido.numero_comanda } });
     } catch (e) {
       setError(
@@ -744,7 +848,6 @@ function TransferenciaPago({
         ref={inputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         className="hidden"
         onChange={(e) => onComprobante(e.target.files?.[0] ?? null)}
       />

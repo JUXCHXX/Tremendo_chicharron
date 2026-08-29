@@ -519,7 +519,9 @@ export async function crearPedido(data: {
   }
 
   // Guardar localmente para compatibilidad con el flujo actual
-  setState((s) => ({ ...s, pedidos: [pedido, ...s.pedidos], cart: [] }));
+  // Checkout limpia el carrito solo cuando confirma todo el flujo,
+  // incluyendo la subida del comprobante si aplica.
+  setState((s) => ({ ...s, pedidos: [pedido, ...s.pedidos] }));
 
   // Persistir la comanda del último pedido en sessionStorage para que la
   // pantalla de confirmación SIEMPRE encuentre el pedido, incluso si el
