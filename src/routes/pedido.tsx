@@ -666,6 +666,9 @@ function Checkout() {
         {medio === "efectivo" && (
           <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
             <p className="font-display text-xl text-primary">¿Con cuánto vas a pagar?</p>
+            <p className="mt-1 rounded-xl bg-primary/10 px-3 py-2 text-sm font-semibold text-primary">
+              Total a pagar: {formatCOP(total)}
+            </p>
             <input
               inputMode="numeric"
               value={billete}

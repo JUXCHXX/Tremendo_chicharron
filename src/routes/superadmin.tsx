@@ -229,15 +229,19 @@ function SuperAdmin() {
   const toggleAgotadoDb = async (producto: ProductoDb) => {
     if (!supabase) return;
     const nuevo = !producto.disponible;
+    setMensaje("");
     const { error } = await supabase
       .from("productos")
       .update({ disponible: nuevo })
-      .eq("id", producto.id);
+      .eq("id", producto.id)
+      .select("id, disponible")
+      .single();
     if (error) {
       setMensaje(`Error: ${error.message}`);
       return;
     }
     await recargar();
+    setMensaje(`Producto marcado como ${nuevo ? "disponible" : "agotado"}.`);
   };
 
   return (
