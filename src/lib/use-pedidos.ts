@@ -94,22 +94,23 @@ export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: bo
     }
     let filas: (PedidoDb & { pedido_items: PedidoItemDb[] })[];
     if (opts?.telefono) {
-      const { data, error } = await supabase.rpc("consultar_pedidos_por_telefono", {
-        p_telefono: opts.telefono,
-      });
+      // Defensa en profundidad: el teléfono debe viajar como filtro SQL y como
+      // header para que RLS aplique la misma identidad en la base de datos.
+      // Nunca traemos todos los pedidos para filtrarlos después en JavaScript.
+      const { data, error } = await supabase
+        .from("pedidos")
+        .select("*, pedido_items(*)")
+        .eq("cliente_telefono", opts.telefono)
+        .setHeader("x-cliente-telefono", opts.telefono)
+        .order("creado_en", { ascending: false });
       if (error) {
         console.error("Error cargando pedidos del cliente:", error);
         setCargando(false);
         return;
       }
-      const entradas = (Array.isArray(data) ? data : []) as {
-        pedido: PedidoDb;
-        items: PedidoItemDb[];
-      }[];
-      filas = entradas.map((entrada) => ({
-        ...entrada.pedido,
-        pedido_items: entrada.items ?? [],
-      }));
+      filas = (Array.isArray(data) ? data : []) as (PedidoDb & {
+        pedido_items: PedidoItemDb[];
+      })[];
     } else {
       const { data, error } = await supabase
         .from("pedidos")
