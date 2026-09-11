@@ -6,7 +6,7 @@ import {
   useLocation,
   Outlet,
 } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Printer,
   RefreshCcw,
@@ -29,6 +29,7 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragStartEvent,
@@ -114,6 +115,21 @@ const BADGE_ESTADO: Record<string, string> = {
 
 type Seccion = "pedidos" | "historial" | "config";
 
+function formatoTranscurrido(creadoEn: string, ahora: number): string {
+  const segundos = Math.max(0, Math.floor((ahora - new Date(creadoEn).getTime()) / 1000));
+  return `${Math.floor(segundos / 60)
+    .toString()
+    .padStart(2, "0")}:${(segundos % 60).toString().padStart(2, "0")}`;
+}
+
+function siguienteEstado(estado: string): EstadoPedido | null {
+  if (["pendiente_confirmacion_cajera", "pago_confirmado"].includes(estado)) return "en_cocina";
+  if (estado === "en_cocina") return "en_preparacion";
+  if (estado === "en_preparacion") return "en_camino";
+  if (estado === "en_camino") return "entregado";
+  return null;
+}
+
 function Admin() {
   const navigate = useNavigate();
   const { pedidos, recargar, actualizarLocal } = usePedidosRealtime({ staff: true });
@@ -126,6 +142,8 @@ function Admin() {
   const [detalleId, setDetalleId] = useState<string | null>(null);
   const [domiciliarios, setDomiciliarios] = useState<Record<string, string>>({});
   const [comprobanteAbierto, setComprobanteAbierto] = useState<string | null>(null);
+  const [sonidoActivo, setSonidoActivo] = useState(false);
+  const audioAlertaRef = useRef<HTMLAudioElement | null>(null);
 
   // Cargar domiciliarios para mostrar el nombre en las tarjetas
   useEffect(() => {
@@ -143,7 +161,39 @@ function Admin() {
     void cargarDomiciliarios();
   }, []);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+  );
+
+  const pedidosSinAtender = pedidos.filter((p) => etapaVisualEstado(p.estado) === "nuevo_pedido");
+
+  // Una llegada o cambio Realtime actualiza `pedidos`; al variar la cantidad de
+  // pendientes se reinicia el ciclo y se avisa inmediatamente.
+  useEffect(() => {
+    if (!sonidoActivo || pedidosSinAtender.length === 0) return;
+    const reproducir = () => {
+      const audio = audioAlertaRef.current;
+      if (!audio) return;
+      audio.currentTime = 0;
+      void audio.play().catch(() => setSonidoActivo(false));
+    };
+    reproducir();
+    const intervalo = window.setInterval(reproducir, 10_000);
+    return () => window.clearInterval(intervalo);
+  }, [sonidoActivo, pedidosSinAtender.length]);
+
+  const activarSonido = () => {
+    const audio = audioAlertaRef.current;
+    if (!audio) return;
+    audio.currentTime = 0;
+    void audio
+      .play()
+      .then(() => setSonidoActivo(true))
+      .catch(() =>
+        setErrorAccion("El navegador bloqueó el sonido. Toca nuevamente para activarlo."),
+      );
+  };
 
   const { pathname } = useLocation();
   if (pathname.endsWith("/login")) {
@@ -295,6 +345,7 @@ function Admin() {
 
   return (
     <div className="flex min-h-screen bg-background">
+      <audio ref={audioAlertaRef} src="/sounds/nuevo.mp3" preload="auto" />
       <aside className="flex w-16 flex-col items-center gap-2 border-r border-border bg-card py-4 md:w-56 md:items-stretch md:px-3">
         <div className="mb-4 flex items-center justify-center gap-2 md:justify-start">
           <span className="font-display text-2xl text-primary">TC</span>
@@ -376,6 +427,12 @@ function Admin() {
                   Arrastra las tarjetas entre columnas para actualizar el estado
                 </p>
               </div>
+              <button
+                onClick={activarSonido}
+                className={`rounded-xl border px-3 py-2 text-xs font-semibold ${sonidoActivo ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-primary/50 bg-primary/10 text-primary"}`}
+              >
+                {sonidoActivo ? "Sonido de alertas activo" : "Activar sonido de alertas"}
+              </button>
               <input
                 value={busquedaComanda}
                 onChange={(e) => setBusquedaComanda(e.target.value)}
@@ -652,6 +709,16 @@ function TarjetaPedido({
   const items = pd.items ?? [];
   const [motivo, setMotivo] = useState("");
   const [rechazando, setRechazando] = useState(false);
+  const [ahora, setAhora] = useState(() => Date.now());
+  const esPendiente = etapaVisualEstado(pd.estado) === "nuevo_pedido";
+  const atrasado = esPendiente && ahora - new Date(pd.creado_en).getTime() >= 60_000;
+  const estadoSiguiente = siguienteEstado(pd.estado);
+
+  useEffect(() => {
+    if (!esPendiente) return;
+    const intervalo = window.setInterval(() => setAhora(Date.now()), 1_000);
+    return () => window.clearInterval(intervalo);
+  }, [esPendiente]);
 
   return (
     <article
@@ -665,9 +732,9 @@ function TarjetaPedido({
           onVerDetalle(pd.id);
         }
       }}
-      className={`cursor-grab rounded-xl border-2 bg-card p-3 shadow-sm transition-shadow hover:shadow-md ${
+      className={`cursor-grab touch-manipulation rounded-xl border-2 bg-card p-3 shadow-sm transition-shadow hover:shadow-md ${
         COLOR_ESTADO[pd.estado] ?? "border-border"
-      } ${overlay ? "rotate-2" : ""}`}
+      } ${atrasado ? "animate-pulse border-red-500 bg-red-500/10 shadow-[0_0_18px_rgba(239,68,68,.45)]" : ""} ${overlay ? "rotate-2" : ""}`}
     >
       {/* Número de comanda + estado + botón de ver detalle */}
       <div className="flex items-start justify-between gap-2">
@@ -693,6 +760,15 @@ function TarjetaPedido({
           )}
         </div>
       </div>
+
+      {esPendiente && (
+        <p
+          className={`mt-2 rounded-lg px-2 py-1 text-xs font-bold ${atrasado ? "bg-red-500/20 text-red-200" : "bg-muted text-muted-foreground"}`}
+        >
+          {atrasado ? "ATRASADO · " : "En espera · "}
+          {formatoTranscurrido(pd.creado_en, ahora)}
+        </p>
+      )}
 
       {/* Domiciliario asignado */}
       {pd.domiciliario_id && domiciliarios[pd.domiciliario_id] && (
@@ -816,7 +892,19 @@ function TarjetaPedido({
               disabled={cambiandoId === pd.id}
               className="rounded-lg bg-brasa px-2 py-1 text-[10px] font-bold text-primary-foreground disabled:opacity-50"
             >
-              Confirmar pedido
+              Siguiente estado →
+            </button>
+          )}
+          {estadoSiguiente && !overlay && pd.estado !== "pendiente_confirmacion_cajera" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void onCambiarEstado(pd.id, estadoSiguiente);
+              }}
+              disabled={cambiandoId === pd.id}
+              className="rounded-lg border border-primary/50 bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary disabled:opacity-50"
+            >
+              Siguiente estado →
             </button>
           )}
           {/* La factura queda disponible inmediatamente después de confirmar. */}

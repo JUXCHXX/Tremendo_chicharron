@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, ShoppingBag, Plus, Minus, X, Star } from "lucide-react";
 import { VARIANTES_PICADA, dentroDeHorario, formatCOP } from "@/lib/menu-data";
 import { addToCart, cartTotal, updateCantidad, useStore } from "@/lib/store";
-import { useMenuData, type ProductoDb } from "@/lib/use-menu-data";
+import { useMenuData, type ProductoDb, type VariantePrecioDb } from "@/lib/use-menu-data";
 import { Model3DPlaceholder } from "@/components/Model3DPlaceholder";
 import { DonVelto } from "@/components/DonVelto";
 import { FooterMenu } from "@/components/Marca";
@@ -55,7 +55,7 @@ function slugifyNombre(nombre: string): string {
 }
 
 function Menu() {
-  const { categorias, productos, cargando, error } = useMenuData();
+  const { categorias, productos, variantesPrecio, cargando, error } = useMenuData();
   const [categoriaAbierta, setCategoriaAbierta] = useState<string | null>(null);
   const [seleccion, setSeleccion] = useState<ProductoDb | null>(null);
   const [carritoAbierto, setCarritoAbierto] = useState(false);
@@ -218,8 +218,10 @@ function Menu() {
                       {productosCat.map((p) => {
                         const agotado = agotados.includes(p.id) || !p.disponible;
                         const precio = precioDe(p);
+                        const primeraVariante = variantesPrecio.find((v) => v.producto_id === p.id);
                         const textoPrecio = p.por_persona
-                          ? "Desde " + formatCOP(VARIANTES_PICADA[0]!.precio)
+                          ? "Desde " +
+                            formatCOP(primeraVariante?.precio ?? VARIANTES_PICADA[0]!.precio)
                           : precio
                             ? formatCOP(precio)
                             : "Precio por definir";
@@ -354,6 +356,7 @@ function Menu() {
         <AgregarProducto
           producto={seleccion}
           precioBase={precioDe(seleccion)}
+          variantes={variantesPrecio.filter((v) => v.producto_id === seleccion.id)}
           onClose={() => setSeleccion(null)}
           resumen={resumenValoraciones[seleccion.id] ?? undefined}
         />
@@ -417,15 +420,21 @@ function Modal({
 function AgregarProducto({
   producto,
   precioBase,
+  variantes,
   onClose,
   resumen,
 }: {
   producto: ProductoDb;
   precioBase: number | null;
+  variantes: VariantePrecioDb[];
   onClose: () => void;
   resumen?: ResumenValoracion | undefined;
 }) {
-  const [personas, setPersonas] = useState(VARIANTES_PICADA[0]!.personas);
+  // La constante solo es respaldo para instalaciones antiguas sin filas en DB.
+  const variantesDisponibles = variantes.length
+    ? variantes.map((v) => ({ personas: v.cantidad_personas, precio: v.precio }))
+    : VARIANTES_PICADA;
+  const [personas, setPersonas] = useState(variantesDisponibles[0]!.personas);
   const [cantidad, setCantidad] = useState(1);
   const [notas, setNotas] = useState("");
   const [combo, setCombo] = useState(false);
@@ -447,7 +456,7 @@ function AgregarProducto({
   }, [producto.id]);
 
   const precio = producto.por_persona
-    ? (VARIANTES_PICADA.find((v) => v.personas === personas)?.precio ?? 0)
+    ? (variantesDisponibles.find((v) => v.personas === personas)?.precio ?? 0)
     : (precioBase ?? 0);
 
   return (
@@ -473,7 +482,7 @@ function AgregarProducto({
         <div className="mt-4">
           <p className="mb-2 text-xs tracking-widest uppercase">¿Para cuántas personas?</p>
           <div className="flex flex-wrap gap-2">
-            {VARIANTES_PICADA.map((v) => (
+            {variantesDisponibles.map((v) => (
               <button
                 key={v.personas}
                 onClick={() => setPersonas(v.personas)}

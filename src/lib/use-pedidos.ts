@@ -213,9 +213,18 @@ export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: bo
     void cargar();
 
     if (!supabase) return;
-    // Estrategia única de seguimiento: polling por REST con el header
-    // x-cliente-telefono. Realtime anónimo no puede satisfacer esa política.
-    // Staff continúa consultando por polling para conservar el mismo modelo.
+    // Caja recibe cambios inmediatamente por Realtime. El polling se conserva
+    // como respaldo para clientes anónimos y para proyectos donde la publicación
+    // de Realtime aún no esté habilitada en la tabla.
+    const canal = opts?.staff
+      ? supabase
+          .channel("pedidos-caja")
+          .on("postgres_changes", { event: "*", schema: "public", table: "pedidos" }, () => {
+            void cargar();
+          })
+          .subscribe()
+      : null;
+
     const intervalo = setInterval(() => {
       const hayPedidosActivos = pedidosRef.current.some(
         (p) => p.estado !== "entregado" && p.estado !== "cancelado",
@@ -229,6 +238,7 @@ export function usePedidosRealtime(opts?: { telefono?: string | null; staff?: bo
 
     return () => {
       clearInterval(intervalo);
+      if (canal) void supabase.removeChannel(canal);
     };
   }, [cargar, opts?.staff, opts?.telefono]);
 

@@ -24,6 +24,13 @@ export interface ProductoDb {
   orden: number;
 }
 
+export interface VariantePrecioDb {
+  id: string;
+  producto_id: string;
+  cantidad_personas: number;
+  precio: number;
+}
+
 export interface PromocionDb {
   id: string;
   titulo: string;
@@ -39,6 +46,7 @@ export interface PromocionDb {
 export function useMenuData() {
   const [categorias, setCategorias] = useState<CategoriaDb[]>([]);
   const [productos, setProductos] = useState<ProductoDb[]>([]);
+  const [variantesPrecio, setVariantesPrecio] = useState<VariantePrecioDb[]>([]);
   const [promociones, setPromociones] = useState<PromocionDb[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,17 +59,20 @@ export function useMenuData() {
     }
     setCargando(true);
     try {
-      const [cats, prods, promos] = await Promise.all([
+      const [cats, prods, variantes, promos] = await Promise.all([
         supabase.from("categorias").select("*").order("orden"),
         supabase.from("productos").select("*").order("orden"),
+        supabase.from("variantes_precio").select("*").order("cantidad_personas"),
         supabase.from("promociones").select("*").order("creado_en", { ascending: false }),
       ]);
       if (cats.error) throw cats.error;
       if (prods.error) throw prods.error;
+      if (variantes.error) throw variantes.error;
       if (promos.error) throw promos.error;
 
       setCategorias(cats.data as CategoriaDb[]);
       setProductos(prods.data as ProductoDb[]);
+      setVariantesPrecio(variantes.data as VariantePrecioDb[]);
       setPromociones(promos.data as PromocionDb[]);
       setError(null);
     } catch (e) {
@@ -75,7 +86,7 @@ export function useMenuData() {
     void cargar();
   }, []);
 
-  return { categorias, productos, promociones, cargando, error, recargar: cargar };
+  return { categorias, productos, variantesPrecio, promociones, cargando, error, recargar: cargar };
 }
 
 /**

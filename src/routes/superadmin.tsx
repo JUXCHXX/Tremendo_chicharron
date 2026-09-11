@@ -17,6 +17,7 @@ import {
   Trash2,
   ImagePlus,
   Coins,
+  Minus,
 } from "lucide-react";
 import { estaAutenticado, cerrarSesion } from "@/lib/auth-staff";
 import { formatCOP } from "@/lib/menu-data";
@@ -27,6 +28,7 @@ import {
   type ProductoDb,
   type CategoriaDb,
   type PromocionDb,
+  type VariantePrecioDb,
 } from "@/lib/use-menu-data";
 import { marcarRespaldo, useStore } from "@/lib/store";
 import { descargarExcel, descargarPdfReporte } from "@/lib/documentos";
@@ -77,7 +79,7 @@ export const Route = createFileRoute("/superadmin")({
 
 function SuperAdmin() {
   const navigate = useNavigate();
-  const { categorias, productos, promociones, recargar } = useMenuData();
+  const { categorias, productos, variantesPrecio, promociones, recargar } = useMenuData();
   const config = useStore((s) => s.config);
   const [tab, setTab] = useState<"menu" | "estadisticas" | "promos" | "propinas">("menu");
   const [editandoProducto, setEditandoProducto] = useState<ProductoDb | null>(null);
@@ -113,7 +115,11 @@ function SuperAdmin() {
   };
 
   // Guardar producto (crear o editar) usando UUID real de Supabase
-  const guardarProducto = async (producto: Partial<ProductoDb>, imagenFile?: File | null) => {
+  const guardarProducto = async (
+    producto: Partial<ProductoDb>,
+    variantes: Array<Pick<VariantePrecioDb, "id" | "cantidad_personas" | "precio">>,
+    imagenFile?: File | null,
+  ) => {
     if (!supabase) return;
     setCargando(true);
     setMensaje("");
@@ -123,6 +129,7 @@ function SuperAdmin() {
         imagenUrl = await subirImagen(imagenFile);
         if (!imagenUrl) return;
       }
+      let productoId = producto.id;
       if (producto.id) {
         const { error } = await supabase
           .from("productos")
@@ -136,21 +143,45 @@ function SuperAdmin() {
           })
           .eq("id", producto.id);
         if (error) throw error;
-        setMensaje("Producto actualizado correctamente.");
       } else {
         // Tarea 15: si no se sube imagen, se usa el slug del nombre como placeholder (.png en /public)
-        const { error } = await supabase.from("productos").insert({
-          nombre: producto.nombre,
-          descripcion: producto.descripcion,
-          precio: producto.precio,
-          categoria_id: producto.categoria_id,
-          imagen_url: imagenUrl ?? `/${slugifyNombre(producto.nombre ?? "")}.png`,
-          disponible: true,
-          orden: 99,
-        });
+        const { data, error } = await supabase
+          .from("productos")
+          .insert({
+            nombre: producto.nombre,
+            descripcion: producto.descripcion,
+            precio: producto.precio,
+            categoria_id: producto.categoria_id,
+            imagen_url: imagenUrl ?? `/${slugifyNombre(producto.nombre ?? "")}.png`,
+            disponible: true,
+            orden: 99,
+          })
+          .select("id")
+          .single();
         if (error) throw error;
-        setMensaje("Producto creado correctamente.");
+        productoId = data.id;
       }
+      if (productoId) {
+        const { error: upsertError } = await supabase.from("variantes_precio").upsert(
+          variantes.map((v) => ({
+            ...(v.id ? { id: v.id } : {}),
+            producto_id: productoId,
+            cantidad_personas: v.cantidad_personas,
+            precio: v.precio,
+          })),
+          { onConflict: "producto_id,cantidad_personas" },
+        );
+        if (upsertError) throw upsertError;
+
+        // Al eliminar una fila del formulario también se elimina su variante persistida.
+        const idsConservados = variantes.filter((v) => v.id).map((v) => v.id);
+        let borrado = supabase.from("variantes_precio").delete().eq("producto_id", productoId);
+        if (idsConservados.length)
+          borrado = borrado.not("id", "in", `(${idsConservados.join(",")})`);
+        const { error: deleteError } = await borrado;
+        if (deleteError) throw deleteError;
+      }
+      setMensaje("Producto y precios actualizados correctamente.");
       await recargar();
       setEditandoProducto(null);
       setCreandoProducto(false);
@@ -437,6 +468,11 @@ function SuperAdmin() {
       {(editandoProducto || creandoProducto) && (
         <ProductoForm
           producto={editandoProducto}
+          variantes={
+            editandoProducto
+              ? variantesPrecio.filter((v) => v.producto_id === editandoProducto.id)
+              : []
+          }
           categorias={categorias}
           onClose={() => {
             setEditandoProducto(null);
@@ -703,6 +739,7 @@ function Kpi({ titulo, valor }: { titulo: string; valor: string }) {
 
 function ProductoForm({
   producto,
+  variantes,
   categorias,
   onClose,
   onGuardar,
@@ -711,7 +748,12 @@ function ProductoForm({
   producto: ProductoDb | null;
   categorias: CategoriaDb[];
   onClose: () => void;
-  onGuardar: (p: Partial<ProductoDb>, imagenFile?: File | null) => Promise<void>;
+  variantes: VariantePrecioDb[];
+  onGuardar: (
+    p: Partial<ProductoDb>,
+    variantes: Array<Pick<VariantePrecioDb, "id" | "cantidad_personas" | "precio">>,
+    imagenFile?: File | null,
+  ) => Promise<void>;
   cargando: boolean;
 }) {
   const [nombre, setNombre] = useState(producto?.nombre ?? "");
@@ -720,6 +762,13 @@ function ProductoForm({
   const [categoriaId, setCategoriaId] = useState(producto?.categoria_id ?? categorias[0]?.id ?? "");
   const [imagenFile, setImagenFile] = useState<File | null>(null);
   const [imagenPreview, setImagenPreview] = useState(producto?.imagen_url ?? "");
+  const [variantesEditables, setVariantesEditables] = useState(
+    variantes.map((v) => ({
+      id: v.id,
+      cantidad_personas: v.cantidad_personas.toString(),
+      precio: v.precio.toString(),
+    })),
+  );
 
   const handleImagen = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -744,6 +793,75 @@ function ProductoForm({
               className="mt-1 w-full rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </label>
+          {(variantes.length > 0 || variantesEditables.length > 0) && (
+            <section className="rounded-xl border border-primary/25 bg-primary/5 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold tracking-widest text-primary uppercase">
+                  Precios por número de personas
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setVariantesEditables((actual) => [
+                      ...actual,
+                      { id: "", cantidad_personas: "", precio: "" },
+                    ])
+                  }
+                  className="rounded-lg border border-primary/40 px-2 py-1 text-xs font-semibold text-primary"
+                >
+                  + Agregar
+                </button>
+              </div>
+              <div className="space-y-2">
+                {variantesEditables.map((variante, index) => (
+                  <div key={variante.id || `nueva-${index}`} className="flex items-end gap-2">
+                    <label className="min-w-0 flex-1 text-[10px] text-muted-foreground">
+                      Personas
+                      <input
+                        min="1"
+                        type="number"
+                        value={variante.cantidad_personas}
+                        onChange={(e) =>
+                          setVariantesEditables((actual) =>
+                            actual.map((v, i) =>
+                              i === index ? { ...v, cantidad_personas: e.target.value } : v,
+                            ),
+                          )
+                        }
+                        className="mt-1 w-full rounded-lg bg-input p-2 text-sm outline-none"
+                      />
+                    </label>
+                    <label className="min-w-0 flex-1 text-[10px] text-muted-foreground">
+                      Precio
+                      <input
+                        min="0"
+                        type="number"
+                        value={variante.precio}
+                        onChange={(e) =>
+                          setVariantesEditables((actual) =>
+                            actual.map((v, i) =>
+                              i === index ? { ...v, precio: e.target.value } : v,
+                            ),
+                          )
+                        }
+                        className="mt-1 w-full rounded-lg bg-input p-2 text-sm outline-none"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setVariantesEditables((actual) => actual.filter((_, i) => i !== index))
+                      }
+                      className="rounded-lg border border-destructive/50 p-2 text-destructive"
+                      aria-label="Eliminar precio por personas"
+                    >
+                      <Minus className="size-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
           <label className="block">
             <span className="text-xs tracking-widest text-muted-foreground uppercase">
               Descripción
@@ -803,6 +921,13 @@ function ProductoForm({
                   precio: Number(precio) || null,
                   categoria_id: categoriaId,
                 },
+                variantesEditables
+                  .map((v) => ({
+                    id: v.id,
+                    cantidad_personas: Number(v.cantidad_personas),
+                    precio: Number(v.precio),
+                  }))
+                  .filter((v) => v.cantidad_personas > 0 && v.precio >= 0),
                 imagenFile,
               )
             }
