@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowLeft, ShoppingBag, Plus, Minus, X, Star } from "lucide-react";
-import { VARIANTES_PICADA, dentroDeHorario, formatCOP } from "@/lib/menu-data";
+import { VARIANTES_PICADA, formatCOP } from "@/lib/menu-data";
 import { addToCart, cartTotal, updateCantidad, useStore } from "@/lib/store";
 import { useMenuData, type ProductoDb, type VariantePrecioDb } from "@/lib/use-menu-data";
+import { useNegocioAbierto } from "@/lib/use-negocio-abierto";
 import { Model3DPlaceholder } from "@/components/Model3DPlaceholder";
 import { DonVelto } from "@/components/DonVelto";
 import { FooterMenu } from "@/components/Marca";
@@ -79,8 +80,8 @@ function Menu() {
   const cart = useStore((s) => s.cart);
   const agotados = useStore((s) => s.config.agotados);
   const precios = useStore((s) => s.config.precios);
-  const negocioAbierto = useStore((s) => s.config.negocio_abierto);
-  const abierto = negocioAbierto && dentroDeHorario();
+  const { negocioAbierto } = useNegocioAbierto();
+  const abierto = negocioAbierto;
 
   const total = cartTotal(cart);
   const unidades = cart.reduce((a, c) => a + c.cantidad, 0);
@@ -217,6 +218,7 @@ function Menu() {
                     <div className="divide-y divide-border/20">
                       {productosCat.map((p) => {
                         const agotado = agotados.includes(p.id) || !p.disponible;
+                        const noDisponible = agotado || !abierto;
                         const precio = precioDe(p);
                         const primeraVariante = variantesPrecio.find((v) => v.producto_id === p.id);
                         const textoPrecio = p.por_persona
@@ -230,9 +232,9 @@ function Menu() {
                           <button
                             key={p.id}
                             onClick={() => setSeleccion(p)}
-                            disabled={agotado}
+                            disabled={noDisponible}
                             className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
-                              agotado ? "cursor-not-allowed opacity-60" : "hover:bg-muted/30"
+                              noDisponible ? "cursor-not-allowed opacity-60" : "hover:bg-muted/30"
                             }`}
                           >
                             <div className="relative size-20 shrink-0 overflow-hidden rounded-xl">
@@ -271,6 +273,10 @@ function Menu() {
                                 alt="Agotado"
                                 className="size-12 shrink-0 object-contain"
                               />
+                            ) : !abierto ? (
+                              <span className="rounded-full bg-muted px-2 py-1 text-[10px] font-bold text-muted-foreground">
+                                Cerrado
+                              </span>
                             ) : (
                               <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brasa text-primary-foreground">
                                 <Plus className="size-4" />
@@ -326,6 +332,7 @@ function Menu() {
                     <span className="w-5 text-center">{i.cantidad}</span>
                     <button
                       onClick={() => updateCantidad(i.key, i.cantidad + 1)}
+                      disabled={!abierto}
                       className="rounded-full border border-border p-2"
                       aria-label="Agregar uno"
                     >
@@ -340,13 +347,22 @@ function Menu() {
                   <span className="text-primary">{formatCOP(total)}</span>
                 </div>
               </div>
-              <Link
-                to="/pedido"
-                onClick={() => setCarritoAbierto(false)}
-                className="block rounded-2xl bg-brasa py-3 text-center font-display text-xl text-primary-foreground shadow-glow"
-              >
-                Ir al checkout
-              </Link>
+              {abierto ? (
+                <Link
+                  to="/pedido"
+                  onClick={() => setCarritoAbierto(false)}
+                  className="block rounded-2xl bg-brasa py-3 text-center font-display text-xl text-primary-foreground shadow-glow"
+                >
+                  Ir al checkout
+                </Link>
+              ) : (
+                <button
+                  disabled
+                  className="block w-full rounded-2xl bg-muted py-3 text-center font-display text-xl text-muted-foreground opacity-60"
+                >
+                  Negocio cerrado
+                </button>
+              )}
             </div>
           )}
         </Modal>
@@ -357,6 +373,7 @@ function Menu() {
           producto={seleccion}
           precioBase={precioDe(seleccion)}
           variantes={variantesPrecio.filter((v) => v.producto_id === seleccion.id)}
+          negocioAbierto={abierto}
           onClose={() => setSeleccion(null)}
           resumen={resumenValoraciones[seleccion.id] ?? undefined}
         />
@@ -421,12 +438,14 @@ function AgregarProducto({
   producto,
   precioBase,
   variantes,
+  negocioAbierto,
   onClose,
   resumen,
 }: {
   producto: ProductoDb;
   precioBase: number | null;
   variantes: VariantePrecioDb[];
+  negocioAbierto: boolean;
   onClose: () => void;
   resumen?: ResumenValoracion | undefined;
 }) {
@@ -545,6 +564,7 @@ function AgregarProducto({
 
       <button
         onClick={() => {
+          if (!negocioAbierto) return;
           addToCart({
             producto_id: producto.id,
             nombre: producto.nombre,
@@ -556,9 +576,10 @@ function AgregarProducto({
           });
           onClose();
         }}
-        className="mt-5 w-full rounded-2xl bg-brasa py-3 font-display text-xl text-primary-foreground shadow-glow"
+        disabled={!negocioAbierto}
+        className="mt-5 w-full rounded-2xl bg-brasa py-3 font-display text-xl text-primary-foreground shadow-glow disabled:cursor-not-allowed disabled:opacity-40"
       >
-        Agregar al pedido
+        {negocioAbierto ? "Agregar al pedido" : "Negocio cerrado"}
       </button>
 
       {/* Lista de valoraciones individuales */}

@@ -12,13 +12,14 @@ import {
   X,
   QrCode,
 } from "lucide-react";
-import { formatCOP, dentroDeHorario } from "@/lib/menu-data";
+import { formatCOP } from "@/lib/menu-data";
 import { addToCart, cartTotal, clearCart, crearPedido, useStore } from "@/lib/store";
 import { getClienteLocal, guardarCliente, normalizarTelefono } from "@/lib/clientes";
 import { MapaUbicacion } from "@/components/MapaUbicacion";
 import { buscarBarrios, useTarifasDomicilio, type TarifaDomicilio } from "@/lib/tarifas-domicilio";
 import { supabase } from "@/lib/supabase";
 import { linkPago } from "@/lib/documentos";
+import { useNegocioAbierto } from "@/lib/use-negocio-abierto";
 
 const CUENTAS_TRANSFERENCIA = [
   {
@@ -156,7 +157,8 @@ function Checkout() {
   const borradorInicial = leerBorradorCheckout();
   const tieneBorrador = borradorInicial !== null;
   const cart = useStore((s) => s.cart);
-  const negocioAbierto = useStore((s) => s.config.negocio_abierto) && dentroDeHorario();
+  const { negocioAbierto: negocioConfigurado } = useNegocioAbierto();
+  const negocioAbierto = negocioConfigurado;
   const subtotal = cartTotal(cart);
   const { tarifas, cargando: cargandoTarifas } = useTarifasDomicilio();
 
@@ -293,6 +295,10 @@ function Checkout() {
   async function confirmar() {
     // Evitar doble clic / reintentos mientras se procesa (previene duplicados)
     if (procesando) return;
+    if (!negocioAbierto) {
+      setError("El negocio está cerrado por el momento. No se reciben pedidos.");
+      return;
+    }
     if (!nombre.trim() || telefono.trim().length < 7) {
       setError("Completa nombre y teléfono.");
       return;

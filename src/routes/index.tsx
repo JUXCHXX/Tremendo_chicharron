@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { UtensilsCrossed, Truck, MapPin, BadgePercent } from "lucide-react";
-import { dentroDeHorario, HORARIOS } from "@/lib/menu-data";
+import { HORARIOS } from "@/lib/menu-data";
 import { useMenuData, promocionVigente } from "@/lib/use-menu-data";
-import { useStore } from "@/lib/store";
+import { useNegocioAbierto } from "@/lib/use-negocio-abierto";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -36,7 +36,10 @@ const BOTONES = [
 ] as const;
 
 function Home() {
-  const abierto = useStore((s) => s.config.negocio_abierto) && dentroDeHorario();
+  const { negocioAbierto } = useNegocioAbierto();
+  // El interruptor del superadmin es la autoridad: permite abrir fuera del
+  // horario regular o cerrar temporalmente sin que el reloj lo contradiga.
+  const abierto = negocioAbierto;
   const { promociones } = useMenuData();
   const promoVigente = promociones.find((p) => promocionVigente(p));
 
@@ -68,7 +71,7 @@ function Home() {
               : "border-destructive/50 bg-destructive/10 text-destructive"
           }`}
         >
-          {abierto ? "Abierto ahora" : "Cerrado por el momento"}
+          {abierto ? "🟢 Abierto" : "🔴 Cerrado por el momento"}
         </span>
 
         {promoVigente && (

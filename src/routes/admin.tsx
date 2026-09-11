@@ -132,7 +132,14 @@ function siguienteEstado(estado: string): EstadoPedido | null {
 
 function Admin() {
   const navigate = useNavigate();
-  const { pedidos, recargar, actualizarLocal } = usePedidosRealtime({ staff: true });
+  const {
+    pedidos,
+    cargando: cargandoPedidos,
+    recargar,
+    actualizarLocal,
+  } = usePedidosRealtime({
+    staff: true,
+  });
   const [seccion, setSeccion] = useState<Seccion>("pedidos");
   const [activoId, setActivoId] = useState<string | null>(null);
   const [activoEstado, setActivoEstado] = useState<EstadoPedido | null>(null);
@@ -143,7 +150,9 @@ function Admin() {
   const [domiciliarios, setDomiciliarios] = useState<Record<string, string>>({});
   const [comprobanteAbierto, setComprobanteAbierto] = useState<string | null>(null);
   const [sonidoActivo, setSonidoActivo] = useState(false);
+  const [alertasPendientes, setAlertasPendientes] = useState<string[]>([]);
   const audioAlertaRef = useRef<HTMLAudioElement | null>(null);
+  const pedidosConocidosRef = useRef<Set<string> | null>(null);
 
   // Cargar domiciliarios para mostrar el nombre en las tarjetas
   useEffect(() => {
@@ -168,10 +177,34 @@ function Admin() {
 
   const pedidosSinAtender = pedidos.filter((p) => etapaVisualEstado(p.estado) === "nuevo_pedido");
 
-  // Una llegada o cambio Realtime actualiza `pedidos`; al variar la cantidad de
-  // pendientes se reinicia el ciclo y se avisa inmediatamente.
+  // El primer snapshot llena el tablero, pero no es una "llegada nueva". Las
+  // tarjetas que aparezcan después por Realtime/polling sí inician su alerta.
   useEffect(() => {
-    if (!sonidoActivo || pedidosSinAtender.length === 0) return;
+    if (pedidosConocidosRef.current === null) {
+      if (!cargandoPedidos) pedidosConocidosRef.current = new Set(pedidos.map((p) => p.id));
+      return;
+    }
+
+    const conocidos = pedidosConocidosRef.current;
+    const nuevosIds = pedidos
+      .filter((p) => etapaVisualEstado(p.estado) === "nuevo_pedido" && !conocidos.has(p.id))
+      .map((p) => p.id);
+    pedidos.forEach((p) => conocidos.add(p.id));
+
+    if (nuevosIds.length) {
+      setAlertasPendientes((actual) => [...new Set([...actual, ...nuevosIds])]);
+    }
+    const pendientesAhora = new Set(
+      pedidos.filter((p) => etapaVisualEstado(p.estado) === "nuevo_pedido").map((p) => p.id),
+    );
+    setAlertasPendientes((actual) => {
+      const siguiente = actual.filter((id) => pendientesAhora.has(id));
+      return siguiente.length === actual.length ? actual : siguiente;
+    });
+  }, [pedidos, cargandoPedidos]);
+
+  useEffect(() => {
+    if (!sonidoActivo || alertasPendientes.length === 0) return;
     const reproducir = () => {
       const audio = audioAlertaRef.current;
       if (!audio) return;
@@ -181,7 +214,7 @@ function Admin() {
     reproducir();
     const intervalo = window.setInterval(reproducir, 10_000);
     return () => window.clearInterval(intervalo);
-  }, [sonidoActivo, pedidosSinAtender.length]);
+  }, [sonidoActivo, alertasPendientes.length]);
 
   const activarSonido = () => {
     const audio = audioAlertaRef.current;
@@ -711,7 +744,7 @@ function TarjetaPedido({
   const [rechazando, setRechazando] = useState(false);
   const [ahora, setAhora] = useState(() => Date.now());
   const esPendiente = etapaVisualEstado(pd.estado) === "nuevo_pedido";
-  const atrasado = esPendiente && ahora - new Date(pd.creado_en).getTime() >= 60_000;
+  const atrasado = esPendiente && ahora - new Date(pd.creado_en).getTime() >= 5 * 60_000;
   const estadoSiguiente = siguienteEstado(pd.estado);
 
   useEffect(() => {
@@ -761,12 +794,13 @@ function TarjetaPedido({
         </div>
       </div>
 
-      {esPendiente && (
-        <p
-          className={`mt-2 rounded-lg px-2 py-1 text-xs font-bold ${atrasado ? "bg-red-500/20 text-red-200" : "bg-muted text-muted-foreground"}`}
-        >
-          {atrasado ? "ATRASADO · " : "En espera · "}
-          {formatoTranscurrido(pd.creado_en, ahora)}
+      {atrasado && (
+        <p className="mt-2 rounded-lg bg-red-500/20 px-2 py-1 text-xs font-bold text-red-200">
+          ATRASADO ·{" "}
+          {formatoTranscurrido(
+            new Date(new Date(pd.creado_en).getTime() + 5 * 60_000).toISOString(),
+            ahora,
+          )}
         </p>
       )}
 

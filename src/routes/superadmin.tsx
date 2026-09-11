@@ -33,6 +33,7 @@ import {
 import { marcarRespaldo, useStore } from "@/lib/store";
 import { descargarExcel, descargarPdfReporte } from "@/lib/documentos";
 import { usePedidosRealtime } from "@/lib/use-pedidos";
+import { useNegocioAbierto } from "@/lib/use-negocio-abierto";
 
 /** Convierte "Tremendo Bowl Montañero" → "tremendo-bowl-montanero" (placeholder de imagen). */
 function slugifyNombre(nombre: string): string {
@@ -80,6 +81,7 @@ export const Route = createFileRoute("/superadmin")({
 function SuperAdmin() {
   const navigate = useNavigate();
   const { categorias, productos, variantesPrecio, promociones, recargar } = useMenuData();
+  const { negocioAbierto, actualizar: actualizarNegocio } = useNegocioAbierto();
   const config = useStore((s) => s.config);
   const [tab, setTab] = useState<"menu" | "estadisticas" | "promos" | "propinas">("menu");
   const [editandoProducto, setEditandoProducto] = useState<ProductoDb | null>(null);
@@ -285,20 +287,18 @@ function SuperAdmin() {
         <div className="flex items-center gap-3">
           <button
             onClick={() =>
-              supabase
-                ?.from("configuracion")
-                .update({ negocio_abierto: !config.negocio_abierto })
-                .eq("id", true)
-                .then(() => recargar())
+              void actualizarNegocio(!negocioAbierto)
+                .then(() => setMensaje(`Negocio ${negocioAbierto ? "cerrado" : "abierto"}.`))
+                .catch((e) => setMensaje(`Error al actualizar el negocio: ${e.message}`))
             }
             className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold ${
-              config.negocio_abierto
-                ? "bg-brasa text-primary-foreground"
-                : "border border-destructive/50 text-destructive"
+              negocioAbierto
+                ? "bg-emerald-600 text-white"
+                : "border border-destructive/50 bg-destructive/10 text-destructive"
             }`}
           >
             <Power className="size-4" />
-            {config.negocio_abierto ? "Negocio abierto" : "Negocio cerrado"}
+            {negocioAbierto ? "Negocio abierto" : "Negocio cerrado"}
           </button>
           <Link to="/" className="text-sm text-muted-foreground hover:text-primary">
             ← Inicio
