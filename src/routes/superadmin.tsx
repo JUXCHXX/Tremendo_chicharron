@@ -184,9 +184,13 @@ function SuperAdmin() {
         const { error: deleteError } = await borrado;
         if (deleteError) throw deleteError;
       }
-      setMensaje("Producto y precios actualizados correctamente.");
+      setMensaje("Cambio confirmado");
       await recargar();
-      sileo.success({ title: "Cambio confirmado" });
+      sileo.success({
+        title: "Cambio confirmado",
+        position: "top-center",
+        duration: 8000,
+      });
       setEditandoProducto(null);
       setCreandoProducto(false);
     } catch (e) {
