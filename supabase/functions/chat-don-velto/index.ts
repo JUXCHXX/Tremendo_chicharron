@@ -26,13 +26,6 @@ const CORS_HEADERS = {
   "Access-Control-Max-Age": "86400",
 };
 
-function jsonResponse(body: Record<string, unknown>, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-  });
-}
-
 const VARIANTES_PICADA = [
   { personas: 1, precio: 34000 },
   { personas: 2, precio: 60000 },
@@ -79,7 +72,24 @@ async function generarCartaTexto(categorias: Categoria[], productos: Producto[])
     .join("\n\n");
 }
 
-async function generarSystemPrompt(): Promise<string> {
+async function generarSystemPrompt(
+  slug: string,
+): Promise<{ prompt: string; apiKey: string; modelo: string }> {
+  const { data: restaurante } = await supabase
+    .from("restaurantes")
+    .select("id, nombre, domicilios_activos, chat_ia_activo")
+    .eq("slug", slug)
+    .eq("activo", true)
+    .maybeSingle();
+  if (!restaurante?.id || !restaurante.chat_ia_activo)
+    throw new Error("El chat no está activo para este restaurante.");
+  const { data: ia } = await supabase
+    .from("restaurante_ia")
+    .select("api_key, modelo, nombre, personalidad")
+    .eq("restaurante_id", restaurante.id)
+    .maybeSingle();
+  const apiKey = ia?.api_key ?? GROQ_API_KEY;
+  if (!apiKey) throw new Error("No hay API key de IA configurada para este restaurante.");
   const { data: categorias, error: errCats } = await supabase
     .from("categorias")
     .select("id, nombre")
@@ -95,12 +105,16 @@ async function generarSystemPrompt(): Promise<string> {
   }
 
   const carta = await generarCartaTexto(categorias ?? [], productos ?? []);
-  return `Eres "Don Velto", el mesero virtual de Tremendo Chicharrón, una cocina oculta 100% domicilios en Manizales, Colombia.
-Hablas en español colombiano, cálido, breve y con chispa paisa. Nunca inventas platos ni precios.
+  return {
+    prompt: `Eres "${ia?.nombre ?? "Don Velto"}", el mesero virtual de ${restaurante.nombre}.
+${ia?.personalidad ?? "Hablas en español colombiano, cálido, breve y con chispa paisa."} Nunca inventas platos ni precios.
 Recomiendas según antojo, presupuesto y número de personas. Si preguntan por la picada, usas esta tabla por personas: ${VARIANTES_PICADA.map((v) => `${v.personas} pers ${formatCOP(v.precio)}`).join(", ")}.
 Horarios: lunes a jueves 8am-8pm, viernes y sábado 8am-11pm, domingo 7am-4pm.
 Medios de pago: efectivo, transferencia y tarjetas. El pago se confirma por WhatsApp.
-Respuestas de máximo 4 frases. Esta es la carta:\n\n${carta}`;
+Respuestas de máximo 4 frases. Esta es la carta:\n\n${carta}`,
+    apiKey,
+    modelo: ia?.modelo ?? "openai/gpt-oss-120b",
+  };
 }
 
 // Rate limiting: 8 mensajes por minuto por sesión/IP
@@ -111,9 +125,7 @@ async function verificarRateLimit(identificador: string): Promise<boolean> {
     _limite: 8,
     _ventana: "1 minute",
   });
-  if (error) {
-    throw new Error(`No se pudo verificar el límite de mensajes: ${error.message}`);
-  }
+  if (error) return false;
   return data as boolean;
 }
 
@@ -124,93 +136,52 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const configuracionFaltante = [
-      !GROQ_API_KEY && "GROQ_API_KEY",
-      !SUPABASE_URL && "SUPABASE_URL",
-      !SUPABASE_SERVICE_ROLE_KEY && "SUPABASE_SERVICE_ROLE_KEY",
-    ].filter(Boolean);
-    if (configuracionFaltante.length > 0) {
-      console.error("[chat-don-velto] Faltan secretos/configuración:", configuracionFaltante);
-      return jsonResponse(
-        {
-          error: "El asistente no está configurado correctamente en el servidor.",
-          code: "CONFIGURATION_ERROR",
-          details: `Falta: ${configuracionFaltante.join(", ")}`,
-        },
-        500,
-      );
-    }
-
-    let body: { messages?: unknown };
-    try {
-      body = await req.json();
-    } catch {
-      return jsonResponse(
-        { error: "El cuerpo de la solicitud no es JSON válido.", code: "INVALID_JSON" },
-        400,
-      );
-    }
-
+    const body = await req.json();
     const mensajes = body.messages as { role: string; content: string }[] | undefined;
-    if (
-      !Array.isArray(mensajes) ||
-      mensajes.length === 0 ||
-      mensajes.some(
-        (mensaje) =>
-          !mensaje || typeof mensaje.role !== "string" || typeof mensaje.content !== "string",
-      )
-    ) {
-      return jsonResponse(
-        { error: "Mensajes requeridos con rol y contenido válidos.", code: "INVALID_MESSAGES" },
-        400,
-      );
+    if (!mensajes || !Array.isArray(mensajes) || mensajes.length === 0) {
+      return new Response(JSON.stringify({ error: "Mensajes requeridos." }), {
+        status: 400,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
     }
 
     // Rate limiting por IP
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
     const permitido = await verificarRateLimit(ip);
     if (!permitido) {
-      return jsonResponse(
-        { error: "Estoy atendiendo muchas mesas, intente en un momentico.", code: "RATE_LIMITED" },
-        429,
+      return new Response(
+        JSON.stringify({ error: "Estoy atendiendo muchas mesas, intente en un momentico." }),
+        { status: 429, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
       );
     }
 
-    const systemPrompt = await generarSystemPrompt();
+    const slug = req.headers.get("x-restaurante-slug") ?? "tremendochicharron";
+    const configuracion = await generarSystemPrompt(slug);
 
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_API_KEY}`,
+        Authorization: `Bearer ${configuracion.apiKey}`,
       },
       body: JSON.stringify({
-        model: "openai/gpt-oss-120b",
+        model: configuracion.modelo,
         temperature: 0.7,
-        messages: [{ role: "system", content: systemPrompt }, ...mensajes],
+        messages: [{ role: "system", content: configuracion.prompt }, ...mensajes],
       }),
     });
 
     if (res.status === 429) {
-      return jsonResponse(
-        {
-          error: "Estoy atendiendo muchas mesas, intente en un momentico.",
-          code: "GROQ_RATE_LIMITED",
-        },
-        429,
+      return new Response(
+        JSON.stringify({ error: "Estoy atendiendo muchas mesas, intente en un momentico." }),
+        { status: 429, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
       );
     }
     if (!res.ok) {
-      const detalle = (await res.text()).slice(0, 500);
-      console.error(`[chat-don-velto] Groq respondió ${res.status}:`, detalle);
-      return jsonResponse(
-        {
-          error: `El proveedor de IA rechazó la solicitud (${res.status}).`,
-          code: "GROQ_ERROR",
-          details: detalle || undefined,
-        },
-        502,
-      );
+      return new Response(JSON.stringify({ error: `Groq error: ${res.status}` }), {
+        status: 502,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
     }
 
     const data = await res.json();
@@ -218,15 +189,9 @@ Deno.serve(async (req: Request) => {
       headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     });
   } catch (e) {
-    const details = e instanceof Error ? e.message : String(e);
-    console.error("[chat-don-velto] Error no controlado:", e);
-    return jsonResponse(
-      {
-        error: "No se pudo procesar el mensaje de Don Velto.",
-        code: "INTERNAL_ERROR",
-        details,
-      },
-      500,
-    );
+    return new Response(JSON.stringify({ error: (e as Error).message ?? "Error interno" }), {
+      status: 500,
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    });
   }
 });
