@@ -34,6 +34,7 @@ import { marcarRespaldo, useStore } from "@/lib/store";
 import { descargarExcel, descargarPdfReporte } from "@/lib/documentos";
 import { usePedidosRealtime } from "@/lib/use-pedidos";
 import { useNegocioAbierto } from "@/lib/use-negocio-abierto";
+import { sileo } from "sileo";
 
 /** Convierte "Tremendo Bowl Montañero" → "tremendo-bowl-montanero" (placeholder de imagen). */
 function slugifyNombre(nombre: string): string {
@@ -185,6 +186,7 @@ function SuperAdmin() {
       }
       setMensaje("Producto y precios actualizados correctamente.");
       await recargar();
+      sileo.success({ title: "Cambio confirmado" });
       setEditandoProducto(null);
       setCreandoProducto(false);
     } catch (e) {
