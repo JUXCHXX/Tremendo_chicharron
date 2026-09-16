@@ -302,14 +302,14 @@ begin
     (pedido_id, producto_id, nombre_producto, cantidad, variante_personas, combo, notas, precio_unitario)
   select
     p_pedido_id,
-    nullif(v_item->>'producto_id', '')::uuid,
-    v_item->>'nombre',
-    (v_item->>'cantidad')::int,
-    nullif(v_item->>'variante_personas', '')::int,
-    coalesce((v_item->>'combo')::boolean, false),
-    coalesce(v_item->>'notas', ''),
-    (v_item->>'precio_unitario')::numeric
-  from jsonb_array_elements(p_items) v_item;
+    nullif(elem->>'producto_id', '')::uuid,
+    elem->>'nombre',
+    (elem->>'cantidad')::int,
+    nullif(elem->>'variante_personas', '')::int,
+    coalesce((elem->>'combo')::boolean, false),
+    coalesce(elem->>'notas', ''),
+    (elem->>'precio_unitario')::numeric
+  from jsonb_array_elements(p_items) as elem;
 
   return jsonb_build_object(
     'ok', true,
