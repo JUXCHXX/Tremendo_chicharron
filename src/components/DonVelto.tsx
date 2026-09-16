@@ -92,7 +92,19 @@ export function DonVelto() {
 
       if (error) {
         const status = error.context?.status;
-        const serverMsg = (data as { error?: string } | null)?.error;
+        const responseData = data as { error?: string; details?: string } | null;
+        let serverMsg = responseData?.error ?? responseData?.details;
+        if (!serverMsg && error.context instanceof Response) {
+          try {
+            const contextData = (await error.context.clone().json()) as {
+              error?: string;
+              details?: string;
+            };
+            serverMsg = contextData.error ?? contextData.details;
+          } catch {
+            // La respuesta puede no tener un cuerpo JSON legible.
+          }
+        }
         // 💥 Log real para diagnóstico — el usuario debe revisar la consola
         console.error("[DonVelto] Error invocando chat-don-velto:", {
           status,

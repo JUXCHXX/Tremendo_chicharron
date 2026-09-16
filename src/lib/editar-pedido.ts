@@ -64,9 +64,12 @@ export async function guardarEdicionPedido(
   }));
 
   try {
+    if (import.meta.env.DEV) {
+      console.debug("[editar-pedido] p_items enviado:", itemsJson);
+    }
     let query = supabase.rpc("editar_pedido_con_items", {
       p_pedido_id: pedidoId,
-      p_items: JSON.stringify(itemsJson),
+      p_items: itemsJson,
       p_valor_domicilio: valorDomicilio ?? null,
     });
 

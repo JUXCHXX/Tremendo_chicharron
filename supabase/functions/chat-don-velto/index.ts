@@ -26,6 +26,13 @@ const CORS_HEADERS = {
   "Access-Control-Max-Age": "86400",
 };
 
+function jsonResponse(body: Record<string, unknown>, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+  });
+}
+
 const VARIANTES_PICADA = [
   { personas: 1, precio: 34000 },
   { personas: 2, precio: 60000 },
@@ -104,7 +111,9 @@ async function verificarRateLimit(identificador: string): Promise<boolean> {
     _limite: 8,
     _ventana: "1 minute",
   });
-  if (error) return false;
+  if (error) {
+    throw new Error(`No se pudo verificar el límite de mensajes: ${error.message}`);
+  }
   return data as boolean;
 }
 
@@ -115,29 +124,55 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    if (!GROQ_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: "GROQ_API_KEY no configurada en el servidor." }),
-        { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+    const configuracionFaltante = [
+      !GROQ_API_KEY && "GROQ_API_KEY",
+      !SUPABASE_URL && "SUPABASE_URL",
+      !SUPABASE_SERVICE_ROLE_KEY && "SUPABASE_SERVICE_ROLE_KEY",
+    ].filter(Boolean);
+    if (configuracionFaltante.length > 0) {
+      console.error("[chat-don-velto] Faltan secretos/configuración:", configuracionFaltante);
+      return jsonResponse(
+        {
+          error: "El asistente no está configurado correctamente en el servidor.",
+          code: "CONFIGURATION_ERROR",
+          details: `Falta: ${configuracionFaltante.join(", ")}`,
+        },
+        500,
       );
     }
 
-    const body = await req.json();
+    let body: { messages?: unknown };
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse(
+        { error: "El cuerpo de la solicitud no es JSON válido.", code: "INVALID_JSON" },
+        400,
+      );
+    }
+
     const mensajes = body.messages as { role: string; content: string }[] | undefined;
-    if (!mensajes || !Array.isArray(mensajes) || mensajes.length === 0) {
-      return new Response(JSON.stringify({ error: "Mensajes requeridos." }), {
-        status: 400,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      });
+    if (
+      !Array.isArray(mensajes) ||
+      mensajes.length === 0 ||
+      mensajes.some(
+        (mensaje) =>
+          !mensaje || typeof mensaje.role !== "string" || typeof mensaje.content !== "string",
+      )
+    ) {
+      return jsonResponse(
+        { error: "Mensajes requeridos con rol y contenido válidos.", code: "INVALID_MESSAGES" },
+        400,
+      );
     }
 
     // Rate limiting por IP
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
     const permitido = await verificarRateLimit(ip);
     if (!permitido) {
-      return new Response(
-        JSON.stringify({ error: "Estoy atendiendo muchas mesas, intente en un momentico." }),
-        { status: 429, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+      return jsonResponse(
+        { error: "Estoy atendiendo muchas mesas, intente en un momentico.", code: "RATE_LIMITED" },
+        429,
       );
     }
 
@@ -157,16 +192,25 @@ Deno.serve(async (req: Request) => {
     });
 
     if (res.status === 429) {
-      return new Response(
-        JSON.stringify({ error: "Estoy atendiendo muchas mesas, intente en un momentico." }),
-        { status: 429, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+      return jsonResponse(
+        {
+          error: "Estoy atendiendo muchas mesas, intente en un momentico.",
+          code: "GROQ_RATE_LIMITED",
+        },
+        429,
       );
     }
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: `Groq error: ${res.status}` }), {
-        status: 502,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      });
+      const detalle = (await res.text()).slice(0, 500);
+      console.error(`[chat-don-velto] Groq respondió ${res.status}:`, detalle);
+      return jsonResponse(
+        {
+          error: `El proveedor de IA rechazó la solicitud (${res.status}).`,
+          code: "GROQ_ERROR",
+          details: detalle || undefined,
+        },
+        502,
+      );
     }
 
     const data = await res.json();
@@ -174,9 +218,15 @@ Deno.serve(async (req: Request) => {
       headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: (e as Error).message ?? "Error interno" }), {
-      status: 500,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-    });
+    const details = e instanceof Error ? e.message : String(e);
+    console.error("[chat-don-velto] Error no controlado:", e);
+    return jsonResponse(
+      {
+        error: "No se pudo procesar el mensaje de Don Velto.",
+        code: "INTERNAL_ERROR",
+        details,
+      },
+      500,
+    );
   }
 });
