@@ -89,6 +89,7 @@ async function consultarComanda(comanda: string, telefono: string): Promise<Pedi
         notas: String(i["notas"] ?? ""),
         precio_unitario: Number(i["precio_unitario"] ?? 0),
         combo: Boolean(i["combo"]),
+        proteina: i["proteina"] != null ? String(i["proteina"]) : null,
       })),
     };
     return pedido;

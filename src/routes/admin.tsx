@@ -908,6 +908,11 @@ function TarjetaPedido({
                 <span className="text-[11px] text-amber-300">{item.notas}</span>
               </div>
             ) : null}
+            {item.proteina && (
+              <div className="mt-0.5 rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary">
+                Proteína: {item.proteina}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -917,6 +922,18 @@ function TarjetaPedido({
         <span className="font-display text-xl text-primary">{formatCOP(pd.total)}</span>
         <div className="flex items-center gap-1">
           {cambiandoId === pd.id && <Loader2 className="size-3 animate-spin text-primary" />}
+          {etapaVisualEstado(pd.estado) === "nuevo_pedido" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void onCambiarEstado(pd.id, "cancelado");
+              }}
+              disabled={cambiandoId === pd.id}
+              className="rounded-lg border border-red-500/60 px-2 py-1 text-[10px] font-bold text-red-300 disabled:opacity-50"
+            >
+              <Ban className="mr-1 inline size-3" /> Rechazar
+            </button>
+          )}
           {etapaVisualEstado(pd.estado) === "nuevo_pedido" && (
             <button
               onClick={(e) => {

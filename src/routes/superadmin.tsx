@@ -143,6 +143,7 @@ function SuperAdmin() {
             categoria_id: producto.categoria_id,
             imagen_url: imagenUrl,
             disponible: producto.disponible,
+            opciones_proteina: producto.opciones_proteina ?? [],
           })
           .eq("id", producto.id);
         if (error) throw error;
@@ -157,6 +158,7 @@ function SuperAdmin() {
             categoria_id: producto.categoria_id,
             imagen_url: imagenUrl ?? `/${slugifyNombre(producto.nombre ?? "")}.png`,
             disponible: true,
+            opciones_proteina: producto.opciones_proteina ?? [],
             orden: 99,
           })
           .select("id")
@@ -768,6 +770,9 @@ function ProductoForm({
   const [categoriaId, setCategoriaId] = useState(producto?.categoria_id ?? categorias[0]?.id ?? "");
   const [imagenFile, setImagenFile] = useState<File | null>(null);
   const [imagenPreview, setImagenPreview] = useState(producto?.imagen_url ?? "");
+  const [opcionesProteina, setOpcionesProteina] = useState(
+    producto?.opciones_proteina?.join(", ") ?? "",
+  );
   const [variantesEditables, setVariantesEditables] = useState(
     variantes.map((v) => ({
       id: v.id,
@@ -798,6 +803,20 @@ function ProductoForm({
               onChange={(e) => setNombre(e.target.value)}
               className="mt-1 w-full rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
+          </label>
+          <label className="block">
+            <span className="text-xs tracking-widest text-muted-foreground uppercase">
+              Opciones de proteína
+            </span>
+            <input
+              value={opcionesProteina}
+              onChange={(e) => setOpcionesProteina(e.target.value)}
+              placeholder="Ej: Chicharrón, Chorizo"
+              className="mt-1 w-full rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+            <span className="mt-1 block text-[11px] text-muted-foreground">
+              Separa cada opción con coma. El cliente podrá escoger una al pedir.
+            </span>
           </label>
           {(variantes.length > 0 || variantesEditables.length > 0) && (
             <section className="rounded-xl border border-primary/25 bg-primary/5 p-3">
@@ -904,6 +923,18 @@ function ProductoForm({
               ))}
             </select>
           </label>
+
+          {promo && (
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={promoActiva}
+                onChange={(e) => setPromoActiva(e.target.checked)}
+                className="size-4 accent-[oklch(0.82_0.155_85)]"
+              />
+              Promoción activa
+            </label>
+          )}
           <label className="block">
             <span className="text-xs tracking-widest text-muted-foreground uppercase">Imagen</span>
             <div className="mt-1 flex items-center gap-3">
@@ -926,6 +957,10 @@ function ProductoForm({
                   descripcion,
                   precio: Number(precio) || null,
                   categoria_id: categoriaId,
+                  opciones_proteina: opcionesProteina
+                    .split(",")
+                    .map((opcion) => opcion.trim())
+                    .filter(Boolean),
                 },
                 variantesEditables
                   .map((v) => ({
@@ -973,6 +1008,7 @@ function PromoForm({
   const [fechaInicio, setFechaInicio] = useState(promo?.fecha_inicio ?? "");
   const [fechaFin, setFechaFin] = useState(promo?.fecha_fin ?? "");
   const [diaSemana, setDiaSemana] = useState(promo?.dia_semana?.toString() ?? "");
+  const [promoActiva, setPromoActiva] = useState(promo?.activa ?? true);
   const [imagenFile, setImagenFile] = useState<File | null>(null);
   const [imagenPreview, setImagenPreview] = useState(promo?.imagen_url ?? "");
 
@@ -1096,9 +1132,10 @@ function PromoForm({
                   titulo,
                   descripcion,
                   tipo_vigencia: tipoVigencia,
-                  fecha_inicio: fechaInicio || null,
-                  fecha_fin: fechaFin || null,
-                  dia_semana: diaSemana ? Number(diaSemana) : null,
+                  activa: promoActiva,
+                  fecha_inicio: tipoVigencia === "por_fecha" ? fechaInicio || null : null,
+                  fecha_fin: tipoVigencia === "por_fecha" ? fechaFin || null : null,
+                  dia_semana: tipoVigencia === "rotativa" && diaSemana ? Number(diaSemana) : null,
                 },
                 imagenFile,
               )

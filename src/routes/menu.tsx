@@ -316,6 +316,7 @@ function Menu() {
                       {i.variante_personas ? ` · ${i.variante_personas} pers.` : ""}
                     </p>
                     {i.combo && <p className="text-xs text-accent">Con combo incluido</p>}
+                    {i.proteina && <p className="text-xs text-primary">Proteína: {i.proteina}</p>}
                     {i.notas && <p className="text-xs text-muted-foreground">Nota: {i.notas}</p>}
                     <p className="text-sm text-primary">
                       {formatCOP(i.precio_unitario * i.cantidad)}
@@ -456,6 +457,7 @@ function AgregarProducto({
   const [personas, setPersonas] = useState(variantesDisponibles[0]!.personas);
   const [cantidad, setCantidad] = useState(1);
   const [notas, setNotas] = useState("");
+  const [proteina, setProteina] = useState(producto.opciones_proteina[0] ?? "");
   const [combo, setCombo] = useState(false);
   const [valoraciones, setValoraciones] = useState<ValoracionDb[]>([]);
   const [cargandoValoraciones, setCargandoValoraciones] = useState(true);
@@ -530,6 +532,30 @@ function AgregarProducto({
         </label>
       )}
 
+      {producto.opciones_proteina.length > 0 && (
+        <fieldset className="mt-4">
+          <legend className="mb-2 text-xs tracking-widest uppercase">Elige tu proteína</legend>
+          <div className="flex flex-wrap gap-2">
+            {producto.opciones_proteina.map((opcion) => (
+              <label
+                key={opcion}
+                className={`cursor-pointer rounded-xl px-3 py-2 text-sm ${proteina === opcion ? "bg-brasa text-primary-foreground" : "border border-border bg-card"}`}
+              >
+                <input
+                  type="radio"
+                  name={`proteina-${producto.id}`}
+                  value={opcion}
+                  checked={proteina === opcion}
+                  onChange={() => setProteina(opcion)}
+                  className="sr-only"
+                />
+                {opcion}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
+
       <label className="mt-4 block text-sm">
         <span className="text-xs tracking-widest uppercase">Notas para la cocina</span>
         <textarea
@@ -570,6 +596,7 @@ function AgregarProducto({
             nombre: producto.nombre,
             cantidad,
             variante_personas: producto.por_persona ? personas : null,
+            proteina: proteina || null,
             notas,
             precio_unitario: precio,
             combo,

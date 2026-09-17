@@ -115,6 +115,7 @@ export interface CartItem {
   notas: string;
   precio_unitario: number;
   combo: boolean;
+  proteina: string | null;
 }
 
 export interface Pedido {
@@ -385,6 +386,7 @@ export async function crearPedido(data: {
         cantidad: i.cantidad,
         variante_personas: i.variante_personas,
         combo: i.combo,
+        proteina: i.proteina,
         notas: i.notas,
         precio_unitario: i.precio_unitario,
       }));
@@ -399,6 +401,7 @@ export async function crearPedido(data: {
             cantidad: item.cantidad,
             variante_personas: item.variante_personas,
             combo: item.combo,
+            proteina: item.proteina,
             notas: item.notas,
             precio_unitario: item.precio_unitario,
           })),

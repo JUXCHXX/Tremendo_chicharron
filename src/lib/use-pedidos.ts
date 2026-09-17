@@ -9,6 +9,7 @@ export interface PedidoItemDb {
   cantidad: number;
   variante_personas: number | null;
   combo: boolean;
+  proteina: string | null;
   notas: string;
   precio_unitario: number;
 }
@@ -21,6 +22,7 @@ export interface PedidoItemNormalizado {
   cantidad: number;
   variante_personas: number | null;
   combo: boolean;
+  proteina: string | null;
   notas: string;
   precio_unitario: number;
 }

@@ -176,6 +176,7 @@ function convertirPedido(
       notas: String(i["notas"] ?? ""),
       precio_unitario: Number(i["precio_unitario"] ?? 0),
       combo: Boolean(i["combo"]),
+      proteina: i["proteina"] != null ? String(i["proteina"]) : null,
     })),
   };
 }

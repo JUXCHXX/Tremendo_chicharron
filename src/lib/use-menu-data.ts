@@ -21,6 +21,7 @@ export interface ProductoDb {
   modelo_3d_url: string | null;
   por_persona: boolean;
   combo_gratis: boolean;
+  opciones_proteina: string[];
   orden: number;
 }
 
@@ -71,7 +72,16 @@ export function useMenuData() {
       if (promos.error) throw promos.error;
 
       setCategorias(cats.data as CategoriaDb[]);
-      setProductos(prods.data as ProductoDb[]);
+      setProductos(
+        (prods.data as ProductoDb[]).map((producto) => ({
+          ...producto,
+          opciones_proteina: Array.isArray(producto.opciones_proteina)
+            ? producto.opciones_proteina.filter(
+                (opcion): opcion is string => typeof opcion === "string",
+              )
+            : [],
+        })),
+      );
       setVariantesPrecio(variantes.data as VariantePrecioDb[]);
       setPromociones(promos.data as PromocionDb[]);
       setError(null);
