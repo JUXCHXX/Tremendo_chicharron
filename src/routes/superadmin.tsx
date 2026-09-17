@@ -272,6 +272,30 @@ function SuperAdmin() {
     await recargar();
   };
 
+  const eliminarProducto = async (producto: ProductoDb) => {
+    if (!supabase) return;
+    if (
+      !confirm(
+        `¿Seguro que quieres eliminar “${producto.nombre}”? Esta acción quitará el plato del menú, pero conservará las comandas anteriores.`,
+      )
+    )
+      return;
+    setCargando(true);
+    setMensaje("");
+    try {
+      const { error } = await supabase.from("productos").delete().eq("id", producto.id);
+      if (error) throw error;
+      setMensaje(`Producto “${producto.nombre}” eliminado.`);
+      await recargar();
+    } catch (e) {
+      setMensaje(
+        `Error al eliminar el producto: ${e instanceof Error ? e.message : "desconocido"}`,
+      );
+    } finally {
+      setCargando(false);
+    }
+  };
+
   // Toggle agotado en Supabase
   const toggleAgotadoDb = async (producto: ProductoDb) => {
     if (!supabase) return;
@@ -421,6 +445,15 @@ function SuperAdmin() {
                           aria-label={`Editar ${p.nombre}`}
                         >
                           <Pencil className="size-4" />
+                        </button>
+                        <button
+                          onClick={() => void eliminarProducto(p)}
+                          disabled={cargando}
+                          className="rounded-xl border border-destructive/50 p-2 text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                          aria-label={`Eliminar ${p.nombre}`}
+                          title="Eliminar producto"
+                        >
+                          <Trash2 className="size-4" />
                         </button>
                       </div>
                     );

@@ -9,6 +9,11 @@ create policy productos_write_superadmin on public.productos
   using (public.tiene_rol(auth.uid(), 'superadmin'))
   with check (public.tiene_rol(auth.uid(), 'superadmin'));
 
+drop policy if exists productos_delete_superadmin on public.productos;
+create policy productos_delete_superadmin on public.productos
+  for delete to authenticated
+  using (public.tiene_rol(auth.uid(), 'superadmin'));
+
 drop policy if exists productos_select_publico on public.productos;
 create policy productos_select_publico on public.productos
   for select to anon, authenticated
