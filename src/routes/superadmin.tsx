@@ -29,6 +29,7 @@ import {
   type CategoriaDb,
   type PromocionDb,
   type VariantePrecioDb,
+  opcionesDesdeDescripcion,
 } from "@/lib/use-menu-data";
 import { marcarRespaldo, useStore } from "@/lib/store";
 import { descargarExcel, descargarPdfReporte } from "@/lib/documentos";
@@ -196,7 +197,12 @@ function SuperAdmin() {
       setEditandoProducto(null);
       setCreandoProducto(false);
     } catch (e) {
-      setMensaje(`Error: ${e instanceof Error ? e.message : "desconocido"}`);
+      const detalle = e instanceof Error ? e.message : "desconocido";
+      setMensaje(
+        detalle.includes("row-level security") || detalle.includes("42501")
+          ? "Sin permisos para crear productos. Verifica que tu usuario tenga rol superadmin en public.usuarios y aplica la migración 37_fix_productos_superadmin.sql."
+          : `Error: ${detalle}`,
+      );
     } finally {
       setCargando(false);
     }
@@ -771,7 +777,8 @@ function ProductoForm({
   const [imagenFile, setImagenFile] = useState<File | null>(null);
   const [imagenPreview, setImagenPreview] = useState(producto?.imagen_url ?? "");
   const [opcionesProteina, setOpcionesProteina] = useState(
-    producto?.opciones_proteina?.join(", ") ?? "",
+    producto?.opciones_proteina?.join(", ") ??
+      (producto ? opcionesDesdeDescripcion(producto.descripcion) : []).join(", "),
   );
   const [variantesEditables, setVariantesEditables] = useState(
     variantes.map((v) => ({

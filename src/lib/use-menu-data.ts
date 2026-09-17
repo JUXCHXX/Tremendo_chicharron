@@ -44,6 +44,28 @@ export interface PromocionDb {
   activa: boolean;
 }
 
+const INGREDIENTES_CONFIGURABLES = [
+  "chicharrón",
+  "chorizo",
+  "carne desmechada",
+  "carne",
+  "pollo",
+  "huevo",
+  "huevos",
+  "aguacate",
+  "guacamole",
+  "plátano maduro",
+  "arepa",
+  "papa salada",
+] as const;
+
+export function opcionesDesdeDescripcion(descripcion: string): string[] {
+  const texto = descripcion.toLocaleLowerCase("es");
+  return INGREDIENTES_CONFIGURABLES.filter((ingrediente) => texto.includes(ingrediente)).map(
+    (ingrediente) => ingrediente[0].toLocaleUpperCase("es") + ingrediente.slice(1),
+  );
+}
+
 export function useMenuData() {
   const [categorias, setCategorias] = useState<CategoriaDb[]>([]);
   const [productos, setProductos] = useState<ProductoDb[]>([]);
@@ -75,11 +97,12 @@ export function useMenuData() {
       setProductos(
         (prods.data as ProductoDb[]).map((producto) => ({
           ...producto,
-          opciones_proteina: Array.isArray(producto.opciones_proteina)
-            ? producto.opciones_proteina.filter(
-                (opcion): opcion is string => typeof opcion === "string",
-              )
-            : [],
+          opciones_proteina:
+            Array.isArray(producto.opciones_proteina) && producto.opciones_proteina.length > 0
+              ? producto.opciones_proteina.filter(
+                  (opcion): opcion is string => typeof opcion === "string",
+                )
+              : opcionesDesdeDescripcion(producto.descripcion),
         })),
       );
       setVariantesPrecio(variantes.data as VariantePrecioDb[]);

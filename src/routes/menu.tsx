@@ -3,7 +3,12 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, ShoppingBag, Plus, Minus, X, Star } from "lucide-react";
 import { VARIANTES_PICADA, formatCOP } from "@/lib/menu-data";
 import { addToCart, cartTotal, updateCantidad, useStore } from "@/lib/store";
-import { useMenuData, type ProductoDb, type VariantePrecioDb } from "@/lib/use-menu-data";
+import {
+  opcionesDesdeDescripcion,
+  useMenuData,
+  type ProductoDb,
+  type VariantePrecioDb,
+} from "@/lib/use-menu-data";
 import { useNegocioAbierto } from "@/lib/use-negocio-abierto";
 import { Model3DPlaceholder } from "@/components/Model3DPlaceholder";
 import { DonVelto } from "@/components/DonVelto";
@@ -450,6 +455,10 @@ function AgregarProducto({
   onClose: () => void;
   resumen?: ResumenValoracion | undefined;
 }) {
+  const opcionesDisponibles =
+    producto.opciones_proteina.length > 0
+      ? producto.opciones_proteina
+      : opcionesDesdeDescripcion(producto.descripcion);
   // La constante solo es respaldo para instalaciones antiguas sin filas en DB.
   const variantesDisponibles = variantes.length
     ? variantes.map((v) => ({ personas: v.cantidad_personas, precio: v.precio }))
@@ -457,7 +466,7 @@ function AgregarProducto({
   const [personas, setPersonas] = useState(variantesDisponibles[0]!.personas);
   const [cantidad, setCantidad] = useState(1);
   const [notas, setNotas] = useState("");
-  const [proteinasActivas, setProteinasActivas] = useState(producto.opciones_proteina);
+  const [proteinasActivas, setProteinasActivas] = useState(opcionesDisponibles);
   const [combo, setCombo] = useState(false);
   const [valoraciones, setValoraciones] = useState<ValoracionDb[]>([]);
   const [cargandoValoraciones, setCargandoValoraciones] = useState(true);
@@ -532,13 +541,13 @@ function AgregarProducto({
         </label>
       )}
 
-      {producto.opciones_proteina.length > 0 && (
+      {opcionesDisponibles.length > 0 && (
         <fieldset className="mt-4">
           <legend className="mb-2 text-xs tracking-widest uppercase">
             Personaliza los ingredientes
           </legend>
           <div className="flex flex-wrap gap-2">
-            {producto.opciones_proteina.map((opcion) => (
+            {opcionesDisponibles.map((opcion) => (
               <button
                 type="button"
                 key={opcion}
@@ -597,7 +606,7 @@ function AgregarProducto({
       <button
         onClick={() => {
           if (!negocioAbierto) return;
-          const ingredientesRetirados = producto.opciones_proteina.filter(
+          const ingredientesRetirados = opcionesDisponibles.filter(
             (opcion) => !proteinasActivas.includes(opcion),
           );
           const notaProteinas = ingredientesRetirados.length
