@@ -457,7 +457,7 @@ function AgregarProducto({
   const [personas, setPersonas] = useState(variantesDisponibles[0]!.personas);
   const [cantidad, setCantidad] = useState(1);
   const [notas, setNotas] = useState("");
-  const [proteina, setProteina] = useState(producto.opciones_proteina[0] ?? "");
+  const [proteinasActivas, setProteinasActivas] = useState(producto.opciones_proteina);
   const [combo, setCombo] = useState(false);
   const [valoraciones, setValoraciones] = useState<ValoracionDb[]>([]);
   const [cargandoValoraciones, setCargandoValoraciones] = useState(true);
@@ -534,25 +534,31 @@ function AgregarProducto({
 
       {producto.opciones_proteina.length > 0 && (
         <fieldset className="mt-4">
-          <legend className="mb-2 text-xs tracking-widest uppercase">Elige tu proteína</legend>
+          <legend className="mb-2 text-xs tracking-widest uppercase">
+            Personaliza los ingredientes
+          </legend>
           <div className="flex flex-wrap gap-2">
             {producto.opciones_proteina.map((opcion) => (
-              <label
+              <button
+                type="button"
                 key={opcion}
-                className={`cursor-pointer rounded-xl px-3 py-2 text-sm ${proteina === opcion ? "bg-brasa text-primary-foreground" : "border border-border bg-card"}`}
+                onClick={() =>
+                  setProteinasActivas((actuales) =>
+                    actuales.includes(opcion)
+                      ? actuales.filter((actual) => actual !== opcion)
+                      : [...actuales, opcion],
+                  )
+                }
+                className={`rounded-xl px-3 py-2 text-sm ${proteinasActivas.includes(opcion) ? "bg-brasa text-primary-foreground" : "border border-border bg-card text-muted-foreground line-through"}`}
               >
-                <input
-                  type="radio"
-                  name={`proteina-${producto.id}`}
-                  value={opcion}
-                  checked={proteina === opcion}
-                  onChange={() => setProteina(opcion)}
-                  className="sr-only"
-                />
+                {proteinasActivas.includes(opcion) ? "Incluye " : "Sin "}
                 {opcion}
-              </label>
+              </button>
             ))}
           </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Toca un ingrediente para quitarlo del plato.
+          </p>
         </fieldset>
       )}
 
@@ -591,13 +597,19 @@ function AgregarProducto({
       <button
         onClick={() => {
           if (!negocioAbierto) return;
+          const ingredientesRetirados = producto.opciones_proteina.filter(
+            (opcion) => !proteinasActivas.includes(opcion),
+          );
+          const notaProteinas = ingredientesRetirados.length
+            ? `Sin ${ingredientesRetirados.join(", ")}`
+            : "";
           addToCart({
             producto_id: producto.id,
             nombre: producto.nombre,
             cantidad,
             variante_personas: producto.por_persona ? personas : null,
-            proteina: proteina || null,
-            notas,
+            proteina: null,
+            notas: [notas.trim(), notaProteinas].filter(Boolean).join(". "),
             precio_unitario: precio,
             combo,
           });

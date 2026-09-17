@@ -924,17 +924,6 @@ function ProductoForm({
             </select>
           </label>
 
-          {promo && (
-            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border p-3 text-sm">
-              <input
-                type="checkbox"
-                checked={promoActiva}
-                onChange={(e) => setPromoActiva(e.target.checked)}
-                className="size-4 accent-[oklch(0.82_0.155_85)]"
-              />
-              Promoción activa
-            </label>
-          )}
           <label className="block">
             <span className="text-xs tracking-widest text-muted-foreground uppercase">Imagen</span>
             <div className="mt-1 flex items-center gap-3">
@@ -1061,6 +1050,18 @@ function PromoForm({
               <option value="por_fecha">Por rango de fechas</option>
             </select>
           </label>
+
+          {promo && (
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={promoActiva}
+                onChange={(e) => setPromoActiva(e.target.checked)}
+                className="size-4 accent-[oklch(0.82_0.155_85)]"
+              />
+              Promoción activa
+            </label>
+          )}
 
           {tipoVigencia === "rotativa" && (
             <label className="block">
