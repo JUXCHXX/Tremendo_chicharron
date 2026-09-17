@@ -22,6 +22,7 @@ export interface ProductoDb {
   por_persona: boolean;
   combo_gratis: boolean;
   opciones_proteina: string[];
+  eliminado: boolean;
   orden: number;
 }
 
@@ -95,15 +96,17 @@ export function useMenuData() {
 
       setCategorias(cats.data as CategoriaDb[]);
       setProductos(
-        (prods.data as ProductoDb[]).map((producto) => ({
-          ...producto,
-          opciones_proteina:
-            Array.isArray(producto.opciones_proteina) && producto.opciones_proteina.length > 0
-              ? producto.opciones_proteina.filter(
-                  (opcion): opcion is string => typeof opcion === "string",
-                )
-              : opcionesDesdeDescripcion(producto.descripcion),
-        })),
+        (prods.data as ProductoDb[])
+          .filter((producto) => !producto.eliminado)
+          .map((producto) => ({
+            ...producto,
+            opciones_proteina:
+              Array.isArray(producto.opciones_proteina) && producto.opciones_proteina.length > 0
+                ? producto.opciones_proteina.filter(
+                    (opcion): opcion is string => typeof opcion === "string",
+                  )
+                : opcionesDesdeDescripcion(producto.descripcion),
+          })),
       );
       setVariantesPrecio(variantes.data as VariantePrecioDb[]);
       setPromociones(promos.data as PromocionDb[]);
