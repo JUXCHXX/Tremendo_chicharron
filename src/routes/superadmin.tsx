@@ -283,7 +283,9 @@ function SuperAdmin() {
     setCargando(true);
     setMensaje("");
     try {
-      const { error } = await supabase.from("productos").delete().eq("id", producto.id);
+      const { error } = await supabase.rpc("eliminar_producto_superadmin", {
+        p_producto_id: producto.id,
+      });
       if (error) throw error;
       setMensaje(`Producto “${producto.nombre}” eliminado.`);
       await recargar();
