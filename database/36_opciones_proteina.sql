@@ -3,6 +3,10 @@
 alter table public.productos
   add column if not exists opciones_proteina jsonb not null default '[]'::jsonb;
 
+alter table public.productos
+  add column if not exists max_opciones_proteina int not null default 1
+  check (max_opciones_proteina between 1 and 10);
+
 alter table public.pedido_items
   add column if not exists proteina text;
 

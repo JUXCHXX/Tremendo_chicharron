@@ -145,6 +145,7 @@ function SuperAdmin() {
             imagen_url: imagenUrl,
             disponible: producto.disponible,
             opciones_proteina: producto.opciones_proteina ?? [],
+            max_opciones_proteina: producto.max_opciones_proteina ?? 1,
           })
           .eq("id", producto.id);
         if (error) throw error;
@@ -160,6 +161,7 @@ function SuperAdmin() {
             imagen_url: imagenUrl ?? `/${slugifyNombre(producto.nombre ?? "")}.png`,
             disponible: true,
             opciones_proteina: producto.opciones_proteina ?? [],
+            max_opciones_proteina: producto.max_opciones_proteina ?? 1,
             orden: 99,
           })
           .select("id")
@@ -231,6 +233,7 @@ function SuperAdmin() {
             fecha_inicio: promo.fecha_inicio ?? null,
             fecha_fin: promo.fecha_fin ?? null,
             dia_semana: promo.dia_semana ?? null,
+            dias_semana: promo.dias_semana ?? [],
           })
           .eq("id", promo.id);
         if (error) throw error;
@@ -245,6 +248,7 @@ function SuperAdmin() {
           fecha_inicio: promo.fecha_inicio ?? null,
           fecha_fin: promo.fecha_fin ?? null,
           dia_semana: promo.dia_semana ?? null,
+          dias_semana: promo.dias_semana ?? [],
         });
         if (error) throw error;
         setMensaje("Promoción creada correctamente.");
@@ -811,9 +815,15 @@ function ProductoForm({
   const [categoriaId, setCategoriaId] = useState(producto?.categoria_id ?? categorias[0]?.id ?? "");
   const [imagenFile, setImagenFile] = useState<File | null>(null);
   const [imagenPreview, setImagenPreview] = useState(producto?.imagen_url ?? "");
-  const [opcionesProteina, setOpcionesProteina] = useState(
-    producto?.opciones_proteina?.join(", ") ??
-      (producto ? opcionesDesdeDescripcion(producto.descripcion) : []).join(", "),
+  const [opcionesProteina, setOpcionesProteina] = useState<string[]>(
+    producto?.opciones_proteina?.length
+      ? producto.opciones_proteina
+      : producto
+        ? opcionesDesdeDescripcion(producto.descripcion)
+        : [""],
+  );
+  const [maxOpcionesProteina, setMaxOpcionesProteina] = useState(
+    Math.min(10, Math.max(1, producto?.max_opciones_proteina ?? 1)),
   );
   const [variantesEditables, setVariantesEditables] = useState(
     variantes.map((v) => ({
@@ -850,15 +860,58 @@ function ProductoForm({
             <span className="text-xs tracking-widest text-muted-foreground uppercase">
               Opciones de proteína
             </span>
+            <div className="mt-1 space-y-2">
+              {opcionesProteina.map((opcion, index) => (
+                <div key={`opcion-${index}`} className="flex items-center gap-2">
+                  <input
+                    value={opcion}
+                    onChange={(e) =>
+                      setOpcionesProteina((actuales) =>
+                        actuales.map((actual, i) => (i === index ? e.target.value : actual)),
+                      )
+                    }
+                    placeholder="Ej: Pollo"
+                    className="w-full rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpcionesProteina((actuales) => actuales.filter((_, i) => i !== index))
+                    }
+                    className="rounded-lg border border-destructive/50 p-2 text-destructive"
+                    aria-label={`Eliminar opción ${index + 1}`}
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                disabled={opcionesProteina.length >= 10}
+                onClick={() => setOpcionesProteina((actuales) => [...actuales, ""])}
+                className="flex items-center gap-1 rounded-lg border border-primary/40 px-3 py-2 text-xs font-semibold text-primary disabled:opacity-50"
+              >
+                <Plus className="size-4" /> Agregar opción
+              </button>
+              <span className="block text-[11px] text-muted-foreground">
+                Máximo 10 opciones. El cliente podrá elegir hasta el límite configurado.
+              </span>
+            </div>
+          </label>
+          <label className="block">
+            <span className="text-xs tracking-widest text-muted-foreground uppercase">
+              Máximo de opciones que puede elegir
+            </span>
             <input
-              value={opcionesProteina}
-              onChange={(e) => setOpcionesProteina(e.target.value)}
-              placeholder="Ej: Chicharrón, Chorizo"
+              type="number"
+              min="1"
+              max="10"
+              value={maxOpcionesProteina}
+              onChange={(e) =>
+                setMaxOpcionesProteina(Math.min(10, Math.max(1, Number(e.target.value) || 1)))
+              }
               className="mt-1 w-full rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
-            <span className="mt-1 block text-[11px] text-muted-foreground">
-              Separa cada opción con coma. El cliente podrá escoger una al pedir.
-            </span>
           </label>
           {(variantes.length > 0 || variantesEditables.length > 0) && (
             <section className="rounded-xl border border-primary/25 bg-primary/5 p-3">
@@ -989,9 +1042,9 @@ function ProductoForm({
                   precio: Number(precio) || null,
                   categoria_id: categoriaId,
                   opciones_proteina: opcionesProteina
-                    .split(",")
                     .map((opcion) => opcion.trim())
                     .filter(Boolean),
+                  max_opciones_proteina: maxOpcionesProteina,
                 },
                 variantesEditables
                   .map((v) => ({
@@ -1038,7 +1091,13 @@ function PromoForm({
   );
   const [fechaInicio, setFechaInicio] = useState(promo?.fecha_inicio ?? "");
   const [fechaFin, setFechaFin] = useState(promo?.fecha_fin ?? "");
-  const [diaSemana, setDiaSemana] = useState(promo?.dia_semana?.toString() ?? "");
+  const [diasSemana, setDiasSemana] = useState<number[]>(
+    promo?.dias_semana?.length
+      ? promo.dias_semana
+      : promo?.dia_semana !== null && promo?.dia_semana !== undefined
+        ? [promo.dia_semana]
+        : [],
+  );
   const [promoActiva, setPromoActiva] = useState(promo?.activa ?? true);
   const [imagenFile, setImagenFile] = useState<File | null>(null);
   const [imagenPreview, setImagenPreview] = useState(promo?.imagen_url ?? "");
@@ -1108,22 +1167,32 @@ function PromoForm({
           {tipoVigencia === "rotativa" && (
             <label className="block">
               <span className="text-xs tracking-widest text-muted-foreground uppercase">
-                Día de la semana
+                Días de la semana
               </span>
-              <select
-                value={diaSemana}
-                onChange={(e) => setDiaSemana(e.target.value)}
-                className="mt-1 w-full rounded-xl bg-input p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="">Selecciona un día</option>
-                <option value="0">Domingo</option>
-                <option value="1">Lunes</option>
-                <option value="2">Martes</option>
-                <option value="3">Miércoles</option>
-                <option value="4">Jueves</option>
-                <option value="5">Viernes</option>
-                <option value="6">Sábado</option>
-              </select>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"].map(
+                  (dia, index) => (
+                    <label
+                      key={dia}
+                      className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={diasSemana.includes(index)}
+                        onChange={() =>
+                          setDiasSemana((actuales) =>
+                            actuales.includes(index)
+                              ? actuales.filter((actual) => actual !== index)
+                              : [...actuales, index].sort(),
+                          )
+                        }
+                        className="size-4 accent-[oklch(0.82_0.155_85)]"
+                      />
+                      {dia}
+                    </label>
+                  ),
+                )}
+              </div>
             </label>
           )}
 
@@ -1178,7 +1247,11 @@ function PromoForm({
                   activa: promoActiva,
                   fecha_inicio: tipoVigencia === "por_fecha" ? fechaInicio || null : null,
                   fecha_fin: tipoVigencia === "por_fecha" ? fechaFin || null : null,
-                  dia_semana: tipoVigencia === "rotativa" && diaSemana ? Number(diaSemana) : null,
+                  dia_semana:
+                    tipoVigencia === "rotativa" && diasSemana.length === 1
+                      ? (diasSemana[0] ?? null)
+                      : null,
+                  dias_semana: tipoVigencia === "rotativa" ? diasSemana : [],
                 },
                 imagenFile,
               )

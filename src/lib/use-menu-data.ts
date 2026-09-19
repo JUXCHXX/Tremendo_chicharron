@@ -22,6 +22,7 @@ export interface ProductoDb {
   por_persona: boolean;
   combo_gratis: boolean;
   opciones_proteina: string[];
+  max_opciones_proteina: number;
   eliminado: boolean;
   orden: number;
 }
@@ -42,6 +43,7 @@ export interface PromocionDb {
   fecha_inicio: string | null;
   fecha_fin: string | null;
   dia_semana: number | null;
+  dias_semana: number[];
   activa: boolean;
 }
 
@@ -106,6 +108,10 @@ export function useMenuData() {
                     (opcion): opcion is string => typeof opcion === "string",
                   )
                 : opcionesDesdeDescripcion(producto.descripcion),
+            max_opciones_proteina: Math.min(
+              10,
+              Math.max(1, Number(producto.max_opciones_proteina) || 1),
+            ),
           })),
       );
       setVariantesPrecio(variantes.data as VariantePrecioDb[]);
@@ -128,7 +134,7 @@ export function useMenuData() {
 /**
  * Determina si una promoción está vigente AHORA, en hora de Colombia.
  * - fija: siempre que esté activa.
- * - rotativa: si el dia_semana coincide con el día actual (0 = domingo).
+ * - rotativa: si el día actual está en dias_semana (0 = domingo).
  * - por_fecha: si la fecha de hoy está entre fecha_inicio y fecha_fin.
  */
 export function promocionVigente(p: PromocionDb, ahora = new Date()): boolean {
@@ -146,7 +152,13 @@ export function promocionVigente(p: PromocionDb, ahora = new Date()): boolean {
   if (p.tipo_vigencia === "rotativa") {
     const dias = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const diaHoy = dias.indexOf(get("weekday")); // 0 = domingo
-    return p.dia_semana === diaHoy;
+    const diasConfigurados =
+      Array.isArray(p.dias_semana) && p.dias_semana.length
+        ? p.dias_semana
+        : p.dia_semana === null
+          ? []
+          : [p.dia_semana];
+    return diasConfigurados.includes(diaHoy);
   }
 
   if (p.tipo_vigencia === "por_fecha") {

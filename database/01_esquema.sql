@@ -152,6 +152,7 @@ create table if not exists public.promociones (
   fecha_inicio date,
   fecha_fin date,
   dia_semana int check (dia_semana between 0 and 6), -- 0 = domingo
+  dias_semana int[] not null default '{}'::int[] check (dias_semana <@ array[0,1,2,3,4,5,6]),
   activa boolean not null default true,
   creado_en timestamptz not null default now()
 );

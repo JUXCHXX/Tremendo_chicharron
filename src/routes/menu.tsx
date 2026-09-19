@@ -466,7 +466,7 @@ function AgregarProducto({
   const [personas, setPersonas] = useState(variantesDisponibles[0]!.personas);
   const [cantidad, setCantidad] = useState(1);
   const [notas, setNotas] = useState("");
-  const [proteinasActivas, setProteinasActivas] = useState(opcionesDisponibles);
+  const [proteinasSeleccionadas, setProteinasSeleccionadas] = useState<string[]>([]);
   const [combo, setCombo] = useState(false);
   const [valoraciones, setValoraciones] = useState<ValoracionDb[]>([]);
   const [cargandoValoraciones, setCargandoValoraciones] = useState(true);
@@ -543,31 +543,36 @@ function AgregarProducto({
 
       {opcionesDisponibles.length > 0 && (
         <fieldset className="mt-4">
-          <legend className="mb-2 text-xs tracking-widest uppercase">
-            Personaliza los ingredientes
-          </legend>
-          <div className="flex flex-wrap gap-2">
+          <legend className="text-sm font-semibold">Proteína</legend>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Elige hasta {Math.min(producto.max_opciones_proteina, opcionesDisponibles.length)}
+          </p>
+          <div className="space-y-2">
             {opcionesDisponibles.map((opcion) => (
-              <button
-                type="button"
+              <label
                 key={opcion}
-                onClick={() =>
-                  setProteinasActivas((actuales) =>
-                    actuales.includes(opcion)
-                      ? actuales.filter((actual) => actual !== opcion)
-                      : [...actuales, opcion],
-                  )
-                }
-                className={`rounded-xl px-3 py-2 text-sm ${proteinasActivas.includes(opcion) ? "bg-brasa text-primary-foreground" : "border border-border bg-card text-muted-foreground line-through"}`}
+                className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-3 text-sm"
               >
-                {proteinasActivas.includes(opcion) ? "Incluye " : "Sin "}
+                <input
+                  type="checkbox"
+                  checked={proteinasSeleccionadas.includes(opcion)}
+                  disabled={
+                    !proteinasSeleccionadas.includes(opcion) &&
+                    proteinasSeleccionadas.length >= producto.max_opciones_proteina
+                  }
+                  onChange={() =>
+                    setProteinasSeleccionadas((actuales) =>
+                      actuales.includes(opcion)
+                        ? actuales.filter((actual) => actual !== opcion)
+                        : [...actuales, opcion],
+                    )
+                  }
+                  className="size-4 accent-[oklch(0.82_0.155_85)]"
+                />
                 {opcion}
-              </button>
+              </label>
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            Toca un ingrediente para quitarlo del plato.
-          </p>
         </fieldset>
       )}
 
@@ -606,18 +611,15 @@ function AgregarProducto({
       <button
         onClick={() => {
           if (!negocioAbierto) return;
-          const ingredientesRetirados = opcionesDisponibles.filter(
-            (opcion) => !proteinasActivas.includes(opcion),
-          );
-          const notaProteinas = ingredientesRetirados.length
-            ? `Sin ${ingredientesRetirados.join(", ")}`
+          const notaProteinas = proteinasSeleccionadas.length
+            ? `Proteína: ${proteinasSeleccionadas.join(", ")}`
             : "";
           addToCart({
             producto_id: producto.id,
             nombre: producto.nombre,
             cantidad,
             variante_personas: producto.por_persona ? personas : null,
-            proteina: null,
+            proteina: proteinasSeleccionadas.join(", ") || null,
             notas: [notas.trim(), notaProteinas].filter(Boolean).join(". "),
             precio_unitario: precio,
             combo,
