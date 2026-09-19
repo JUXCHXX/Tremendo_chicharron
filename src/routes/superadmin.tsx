@@ -222,7 +222,7 @@ function SuperAdmin() {
         if (!imagenUrl) return;
       }
       if (promo.id) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("promociones")
           .update({
             titulo: promo.titulo,
@@ -235,22 +235,36 @@ function SuperAdmin() {
             dia_semana: promo.dia_semana ?? null,
             dias_semana: promo.dias_semana ?? [],
           })
-          .eq("id", promo.id);
+          .eq("id", promo.id)
+          .select(
+            "id, titulo, tipo_vigencia, activa, fecha_inicio, fecha_fin, dia_semana, dias_semana",
+          )
+          .single();
         if (error) throw error;
+        if (!data) throw new Error("La promoción no fue devuelta por la base de datos.");
+        console.log("Promoción actualizada confirmada:", data);
         setMensaje("Promoción actualizada correctamente.");
       } else {
-        const { error } = await supabase.from("promociones").insert({
-          titulo: promo.titulo,
-          descripcion: promo.descripcion,
-          imagen_url: imagenUrl,
-          activa: true,
-          tipo_vigencia: promo.tipo_vigencia ?? "fija",
-          fecha_inicio: promo.fecha_inicio ?? null,
-          fecha_fin: promo.fecha_fin ?? null,
-          dia_semana: promo.dia_semana ?? null,
-          dias_semana: promo.dias_semana ?? [],
-        });
+        const { data, error } = await supabase
+          .from("promociones")
+          .insert({
+            titulo: promo.titulo,
+            descripcion: promo.descripcion,
+            imagen_url: imagenUrl,
+            activa: true,
+            tipo_vigencia: promo.tipo_vigencia ?? "fija",
+            fecha_inicio: promo.fecha_inicio ?? null,
+            fecha_fin: promo.fecha_fin ?? null,
+            dia_semana: promo.dia_semana ?? null,
+            dias_semana: promo.dias_semana ?? [],
+          })
+          .select(
+            "id, titulo, tipo_vigencia, activa, fecha_inicio, fecha_fin, dia_semana, dias_semana",
+          )
+          .single();
         if (error) throw error;
+        if (!data) throw new Error("La promoción creada no fue devuelta por la base de datos.");
+        console.log("Promoción creada confirmada:", data);
         setMensaje("Promoción creada correctamente.");
       }
       await recargar();
@@ -267,9 +281,18 @@ function SuperAdmin() {
   const eliminarPromo = async (id: string) => {
     if (!supabase) return;
     if (!confirm("¿Seguro que quieres eliminar esta promoción?")) return;
-    const { error } = await supabase.from("promociones").delete().eq("id", id);
+    const { data, error } = await supabase
+      .from("promociones")
+      .delete()
+      .eq("id", id)
+      .select("id")
+      .single();
     if (error) {
       setMensaje(`Error: ${error.message}`);
+      return;
+    }
+    if (!data) {
+      setMensaje("No se encontró la promoción para eliminar.");
       return;
     }
     setMensaje("Promoción eliminada.");
