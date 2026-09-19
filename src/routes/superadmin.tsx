@@ -1102,6 +1102,24 @@ function PromoForm({
   const [imagenFile, setImagenFile] = useState<File | null>(null);
   const [imagenPreview, setImagenPreview] = useState(promo?.imagen_url ?? "");
 
+  useEffect(() => {
+    setTitulo(promo?.titulo ?? "");
+    setDescripcion(promo?.descripcion ?? "");
+    setTipoVigencia(promo?.tipo_vigencia ?? "fija");
+    setFechaInicio(promo?.fecha_inicio ?? "");
+    setFechaFin(promo?.fecha_fin ?? "");
+    setDiasSemana(
+      promo?.dias_semana?.length
+        ? promo.dias_semana
+        : promo?.dia_semana !== null && promo?.dia_semana !== undefined
+          ? [promo.dia_semana]
+          : [],
+    );
+    setPromoActiva(promo?.activa ?? true);
+    setImagenPreview(promo?.imagen_url ?? "");
+    setImagenFile(null);
+  }, [promo]);
+
   const handleImagen = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
